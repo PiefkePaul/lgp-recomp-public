@@ -1,0 +1,27 @@
+# lgp-recomp-public
+
+**Status: coming soon, work in progress.** There is no code here yet. This repository will hold a public snapshot
+of the project's current state once the remaining game bugs are fixed.
+
+## What it is
+
+A static recompiler and runtime for *Pokémon: Let's Go, Pikachu!* (Nintendo Switch):
+
+- the recompiler translates the game's ARM64 code to C++ ahead of time;
+- the runtime replaces the console's system services, graphics (NVN on WebGPU), audio, input and video;
+- the result runs as a native app on Windows, macOS, Linux, Android and in the browser; iPhone/iPad and Apple TV
+  are experimental.
+
+To build the game from your own dump, use the [lgp-build-kit](https://github.com/PiefkePaul/lgp-build-kit), which
+wraps this code in a step-by-step assistant.
+
+## What it is not
+
+- **No game data, no keys and no decryption are included**, nor any C++ generated from game code. Bring your own
+  legally obtained dump.
+- No ready-made apps are handed out.
+
+## Licence
+
+MIT, see [LICENSE](LICENSE). Third-party code keeps its own licence, as listed in `THIRD_PARTY.md` once the code is
+here. This project is not affiliated with or endorsed by Nintendo, The Pokémon Company or Game Freak.
