@@ -15,6 +15,10 @@ A static recompiler and runtime for a Nintendo Switch game:
 To build the game from your own dump, use the [lgp-build-kit](https://github.com/PiefkePaul/lgp-build-kit), which
 wraps this code in a step-by-step assistant.
 
+Extras built in: widescreen, classic wild battles, EXP as in Yellow, random encounters from the grass, balls and
+throws in battle, local wireless play, iCloud saves and more. The full list with an honest status per item is in the
+[build kit's README](https://github.com/PiefkePaul/lgp-build-kit#extra-features-and-mods).
+
 ## What it is not
 
 - **No game data, no keys and no decryption are included**, nor any C++ generated from game code. Bring your own
