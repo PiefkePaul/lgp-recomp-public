@@ -5,7 +5,7 @@ of the project's current state once the remaining game bugs are fixed.
 
 ## What it is
 
-A static recompiler and runtime for *Pokémon: Let's Go, Pikachu!* (Nintendo Switch):
+A static recompiler and runtime for a Nintendo Switch game:
 
 - the recompiler translates the game's ARM64 code to C++ ahead of time;
 - the runtime replaces the console's system services, graphics (NVN on WebGPU), audio, input and video;
@@ -24,4 +24,4 @@ wraps this code in a step-by-step assistant.
 ## Licence
 
 MIT, see [LICENSE](LICENSE). Third-party code keeps its own licence, as listed in `THIRD_PARTY.md` once the code is
-here. This project is not affiliated with or endorsed by Nintendo, The Pokémon Company or Game Freak.
+here. This project is not affiliated with or endorsed by Nintendo or any game publisher.
