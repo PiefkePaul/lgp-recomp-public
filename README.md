@@ -9,8 +9,8 @@ A static recompiler and runtime for *Pokémon: Let's Go, Pikachu!* (Nintendo Swi
 
 - the recompiler translates the game's ARM64 code to C++ ahead of time;
 - the runtime replaces the console's system services, graphics (NVN on WebGPU), audio, input and video;
-- the result runs as a native app on Windows, macOS, Linux, Android and in the browser; iPhone/iPad and Apple TV
-  are experimental.
+- the result runs as a native app on iPhone/iPad, macOS, Windows, Linux and Android (performance varies by device)
+  and in the browser; Apple TV (playable) and Android TV/Shield are experimental.
 
 To build the game from your own dump, use the [lgp-build-kit](https://github.com/PiefkePaul/lgp-build-kit), which
 wraps this code in a step-by-step assistant.
