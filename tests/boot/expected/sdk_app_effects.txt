@@ -1,0 +1,8 @@
+# lgp_boot_sdkpair_app --app --menu-script play with effects = half in
+# settings.ini: the WebGPU backend renders the listed light effects at half
+# resolution (--effects half; the default LGP_HALFRES_PROGRAMS) and the game
+# runs to its end.
+menu: play
+effects: half resolution (--effects; programs 263baa93)
+start: sdk
+exit: ExitProcess

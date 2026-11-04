@@ -1,0 +1,317 @@
+diff --git a/wgpu-hal/src/metal/device.rs b/wgpu-hal/src/metal/device.rs
+index ecdfe26..3ebfc05 100644
+--- a/wgpu-hal/src/metal/device.rs
++++ b/wgpu-hal/src/metal/device.rs
+@@ -245,17 +245,31 @@ impl super::Device {
+                     options.setPreserveInvariance(true);
+                 }
+ 
+-                let library = self
+-                    .shared
+-                    .device
+-                    .newLibraryWithSource_options_error(
+-                        &NSString::from_str(&source),
+-                        Some(&options),
+-                    )
+-                    .map_err(|err| {
+-                        log::debug!("Naga generated shader:\n{source}");
+-                        crate::PipelineError::Linkage(stage_bit, format!("Metal: {err}"))
+-                    })?;
++                // LGP patch: a library compiled offline for exactly this MSL
++                // (super::precompiled) skips the MSL -> AIR compile.
++                let library = match super::precompiled::library(
++                    &self.shared.device,
++                    &source,
++                    self.shared.private_caps.msl_version,
++                ) {
++                    Some(library) => library,
++                    None => {
++                        let started = super::precompiled::start();
++                        let library = self
++                            .shared
++                            .device
++                            .newLibraryWithSource_options_error(
++                                &NSString::from_str(&super::precompiled::salted(&source)),
++                                Some(&options),
++                            )
++                            .map_err(|err| {
++                                log::debug!("Naga generated shader:\n{source}");
++                                crate::PipelineError::Linkage(stage_bit, format!("Metal: {err}"))
++                            })?;
++                        super::precompiled::compiled_from_source(started);
++                        library
++                    }
++                };
+ 
+                 let ep_index = module
+                     .entry_points
+@@ -1642,6 +1656,7 @@ impl crate::Device for super::Device {
+             }
+ 
+             // Create the pipeline from descriptor
++            let started = super::precompiled::start();
+             let raw = match descriptor {
+                 MetalGenericRenderPipelineDescriptor::Standard(d) => self
+                     .shared
+@@ -1662,6 +1677,7 @@ impl crate::Device for super::Device {
+                     format!("new_render_pipeline_state: {e:?}"),
+                 )
+             })?;
++            super::precompiled::pipeline_state_built(started);
+ 
+             self.counters.render_pipelines.add(1);
+ 
+@@ -1752,6 +1768,7 @@ impl crate::Device for super::Device {
+                 descriptor.setLabel(Some(&NSString::from_str(name)));
+             }
+ 
++            let started = super::precompiled::start();
+             let raw = self
+                 .shared
+                 .device
+@@ -1768,6 +1785,7 @@ impl crate::Device for super::Device {
+                         format!("new_compute_pipeline_state: {e:?}"),
+                     )
+                 })?;
++            super::precompiled::pipeline_state_built(started);
+ 
+             self.counters.compute_pipelines.add(1);
+ 
+diff --git a/wgpu-hal/src/metal/mod.rs b/wgpu-hal/src/metal/mod.rs
+index c46c776..acd2ea0 100644
+--- a/wgpu-hal/src/metal/mod.rs
++++ b/wgpu-hal/src/metal/mod.rs
+@@ -23,6 +23,7 @@ mod command;
+ mod conv;
+ mod device;
+ mod library_from_metallib;
++mod precompiled;
+ mod surface;
+ mod time;
+ 
+diff --git a/wgpu-hal/src/metal/precompiled.rs b/wgpu-hal/src/metal/precompiled.rs
+new file mode 100644
+index 0000000..bd4a5ba
+--- /dev/null
++++ b/wgpu-hal/src/metal/precompiled.rs
+@@ -0,0 +1,220 @@
++//! LGP patch: Metal libraries compiled offline, and where shader compile time
++//! goes.
++//!
++//! `load_shader` writes MSL for every pipeline stage and compiles it with
++//! `newLibraryWithSource` (MSL -> AIR); building the pipeline state then
++//! compiles AIR to GPU code. Three switches, all read once and off unless set:
++//!
++//! - `LGP_WGPU_METAL_DUMP_MSL=<dir>` writes each stage's MSL as
++//!   `<dir>/<hash>.metal`, `<hash>` being the FNV-1a 64 hash of the source in
++//!   16 hex digits. The first line names the MSL version the device used
++//!   (`// lgp-msl: 3.2`), for the offline compiler.
++//! - `LGP_WGPU_METAL_LIBS=<dir>` takes `<dir>/<hash>.metallib` instead of
++//!   compiling the MSL, if that file exists (one library per stage, like the
++//!   compiled one, so memory stays as it was). Missing or unreadable files
++//!   fall back to compiling the source.
++//! - `LGP_WGPU_METAL_STATS=1` prints a line to stderr every 100 pipeline
++//!   states: stages compiled from source and loaded from a metallib, with the
++//!   time they took, and the time spent building pipeline states.
++//! - `LGP_WGPU_METAL_SALT=<text>` puts a comment line with `<text>` in front
++//!   of the MSL compiled from source (not into the hash or the dump). Metal's
++//!   shader cache keys on the source, so a new salt makes its MSL -> AIR step
++//!   cold without clearing the cache (on iOS/tvOS only an uninstall does
++//!   that); the AIR, and with it the cached GPU code, stays the same.
++//!
++//! Since the file name is the hash of the exact source, a library is only ever
++//! used for the MSL it was compiled from; a different device, wgpu version or
++//! pipeline only misses.
++
++use alloc::{format, string::String};
++use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
++use std::{path::PathBuf, sync::OnceLock, time::Instant};
++
++use objc2::{rc::Retained, runtime::ProtocolObject};
++use objc2_metal::{MTLDevice, MTLLanguageVersion, MTLLibrary};
++
++fn dir_from_env(name: &str) -> Option<PathBuf> {
++    std::env::var_os(name)
++        .filter(|v| !v.is_empty())
++        .map(PathBuf::from)
++}
++
++fn dump_dir() -> Option<&'static PathBuf> {
++    static DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
++    DIR.get_or_init(|| {
++        let dir = dir_from_env("LGP_WGPU_METAL_DUMP_MSL")?;
++        match std::fs::create_dir_all(&dir) {
++            Ok(()) => Some(dir),
++            Err(e) => {
++                eprintln!("lgp metal: cannot create {}: {e}", dir.display());
++                None
++            }
++        }
++    })
++    .as_ref()
++}
++
++fn libs_dir() -> Option<&'static PathBuf> {
++    static DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
++    DIR.get_or_init(|| dir_from_env("LGP_WGPU_METAL_LIBS"))
++        .as_ref()
++}
++
++fn stats_enabled() -> bool {
++    static ON: OnceLock<bool> = OnceLock::new();
++    *ON.get_or_init(|| std::env::var("LGP_WGPU_METAL_STATS").is_ok_and(|v| v == "1"))
++}
++
++struct Stats {
++    source: AtomicU64,
++    source_ns: AtomicU64,
++    metallib: AtomicU64,
++    metallib_ns: AtomicU64,
++    missing: AtomicU64,
++    states: AtomicU64,
++    states_ns: AtomicU64,
++}
++
++static STATS: Stats = Stats {
++    source: AtomicU64::new(0),
++    source_ns: AtomicU64::new(0),
++    metallib: AtomicU64::new(0),
++    metallib_ns: AtomicU64::new(0),
++    missing: AtomicU64::new(0),
++    states: AtomicU64::new(0),
++    states_ns: AtomicU64::new(0),
++};
++
++fn hash(source: &str) -> u64 {
++    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
++    for b in source.bytes() {
++        h ^= u64::from(b);
++        h = h.wrapping_mul(0x0000_0100_0000_01b3);
++    }
++    h
++}
++
++fn version_text(version: MTLLanguageVersion) -> String {
++    // MTLLanguageVersion is (major << 16) | minor.
++    let v = version.0 as u64;
++    format!("{}.{}", v >> 16, v & 0xffff)
++}
++
++fn dump(dir: &std::path::Path, name: &str, source: &str, version: MTLLanguageVersion) {
++    let path = dir.join(format!("{name}.metal"));
++    if path.exists() {
++        return;
++    }
++    // Pipelines build on several threads: write aside, then rename.
++    let tmp = dir.join(format!(
++        "{name}.metal.{:?}.tmp",
++        std::thread::current().id()
++    ));
++    let text = format!("// lgp-msl: {}\n{source}", version_text(version));
++    if let Err(e) = std::fs::write(&tmp, text).and_then(|()| std::fs::rename(&tmp, &path)) {
++        eprintln!("lgp metal: cannot write {}: {e}", path.display());
++        let _ = std::fs::remove_file(&tmp);
++    }
++}
++
++/// The library compiled offline for `source`, if `LGP_WGPU_METAL_LIBS` has
++/// one. Also dumps `source` with `LGP_WGPU_METAL_DUMP_MSL`.
++pub(super) fn library(
++    device: &ProtocolObject<dyn MTLDevice>,
++    source: &str,
++    version: MTLLanguageVersion,
++) -> Option<Retained<ProtocolObject<dyn MTLLibrary>>> {
++    let dumping = dump_dir();
++    let libs = libs_dir();
++    if dumping.is_none() && libs.is_none() {
++        return None;
++    }
++    let name = format!("{:016x}", hash(source));
++    if let Some(dir) = dumping {
++        dump(dir, &name, source, version);
++    }
++    let path = libs?.join(format!("{name}.metallib"));
++    let started = start();
++    let bytes = match std::fs::read(&path) {
++        Ok(bytes) => bytes,
++        Err(_) => {
++            STATS.missing.fetch_add(1, Ordering::Relaxed);
++            return None;
++        }
++    };
++    match super::library_from_metallib::new_library_from_metallib_bytes(device, &bytes) {
++        Ok(library) => {
++            if let Some(t) = started {
++                STATS.metallib.fetch_add(1, Ordering::Relaxed);
++                STATS
++                    .metallib_ns
++                    .fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
++            }
++            Some(library)
++        }
++        Err(e) => {
++            static WARNED: AtomicBool = AtomicBool::new(false);
++            if !WARNED.swap(true, Ordering::Relaxed) {
++                eprintln!(
++                    "lgp metal: {} does not load ({e:?}); compiling from source",
++                    path.display()
++                );
++            }
++            STATS.missing.fetch_add(1, Ordering::Relaxed);
++            None
++        }
++    }
++}
++
++/// `source` as compiled from source: with `LGP_WGPU_METAL_SALT` after a
++/// comment line naming the salt.
++pub(super) fn salted(source: &str) -> alloc::borrow::Cow<'_, str> {
++    static SALT: OnceLock<Option<String>> = OnceLock::new();
++    match SALT
++        .get_or_init(|| {
++            std::env::var("LGP_WGPU_METAL_SALT")
++                .ok()
++                .filter(|v| !v.is_empty())
++        })
++        .as_deref()
++    {
++        Some(salt) => format!("// lgp-salt: {salt}\n{source}").into(),
++        None => source.into(),
++    }
++}
++
++/// Start of a timed step, only with `LGP_WGPU_METAL_STATS=1`.
++pub(super) fn start() -> Option<Instant> {
++    stats_enabled().then(Instant::now)
++}
++
++pub(super) fn compiled_from_source(started: Option<Instant>) {
++    if let Some(t) = started {
++        STATS.source.fetch_add(1, Ordering::Relaxed);
++        STATS
++            .source_ns
++            .fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
++    }
++}
++
++pub(super) fn pipeline_state_built(started: Option<Instant>) {
++    let Some(t) = started else { return };
++    STATS
++        .states_ns
++        .fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
++    let n = STATS.states.fetch_add(1, Ordering::Relaxed) + 1;
++    if n.is_multiple_of(100) {
++        let ms = |a: &AtomicU64| a.load(Ordering::Relaxed) as f64 / 1e6;
++        eprintln!(
++            "lgp metal: {} stages from MSL source in {:.0} ms, {} from metallib in {:.0} ms ({} without one), \
++             {} pipeline states in {:.0} ms",
++            STATS.source.load(Ordering::Relaxed),
++            ms(&STATS.source_ns),
++            STATS.metallib.load(Ordering::Relaxed),
++            ms(&STATS.metallib_ns),
++            STATS.missing.load(Ordering::Relaxed),
++            n,
++            ms(&STATS.states_ns),
++        );
++    }
++}

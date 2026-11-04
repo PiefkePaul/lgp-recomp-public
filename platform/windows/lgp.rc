@@ -1,0 +1,4 @@
+// App icon of the lgp desktop apps (lgp_add_boot_executable(... APP), Windows).
+// lgp.ico is made by tools/icon/gen_icons.py. Explorer and SDL's window class
+// take the first icon resource of the exe.
+1 ICON "lgp.ico"

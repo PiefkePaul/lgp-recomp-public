@@ -1,0 +1,7 @@
+# lgp_boot_sdkpair_app --app --menu-script play with aspect = fill in
+# settings.ini: the window renderer takes the picture format (--aspect fill)
+# and the game runs to its end.
+aspect: fill
+menu: play
+start: sdk
+exit: ExitProcess

@@ -1,0 +1,66 @@
+# === NEVER COMMIT GAME DATA (own dump, private use only) ===
+# Game data lives outside the repo in $LGP_PRIVATE_DIR.
+*.nsp
+*.nsz
+*.xci
+*.xcz
+*.nca
+*.ncz
+*.kip
+*.nso
+*.nro
+*.npdm
+*.nacp
+*.tik
+*.cert
+*.keys
+*.key
+prod.keys
+title.keys
+dev.keys
+romfs/
+exefs/
+extracted/
+private/
+*.sav
+*.lgppipes
+*.metal
+*.metallib
+*.bfres
+*.bntx
+*.bfsha
+*.gfpak
+*.gfbmdl
+*.bnsh
+# Exception: self-built homebrew test fixtures (the pre-commit guard in
+# tools/guard/ still checks them; see .githooks/pre-commit)
+!tests/fixtures/**/*.nro
+!tests/fixtures/**/*.nso
+
+# Generated recompiler output (derived game code) - local only
+build/
+build-*/
+out/
+generated/
+gen/
+
+# Tooling
+.vs/
+.vscode/
+.idea/
+CMakeUserPresets.json
+*.gpr
+*.rep/
+.DS_Store
+node_modules/
+__pycache__/
+.claude/worktrees/
+
+# Android signing keys (docs/knowledge/android-ndk-build.md)
+*.keystore
+*.jks
+
+# Tools of the ready-made Windows package (tools/kit/make_bauset.py)
+/bauset/
+# game.cfg and mods of the release packages (make_bauset.py --kit-files): game addresses, never in git
+/kit-files/

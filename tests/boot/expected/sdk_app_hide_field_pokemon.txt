@@ -1,0 +1,6 @@
+# lgp_boot_sdkpair_app --app with menus and settings.ini hide_field_pokemon = 1,
+# Pokémon Gelb (random-encounters) not in mods: the app runs the mod hiding only,
+# not as Gelb, although it names it on the command line.
+app: Let's Go with the field Pokémon hidden (touchable, Pokémon Gelb off)
+start: sdk
+exit: ExitProcess

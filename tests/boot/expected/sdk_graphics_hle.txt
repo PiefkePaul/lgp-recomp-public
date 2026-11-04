@@ -1,0 +1,10 @@
+# lgp_boot_sdkpair --exefs <dir> --graphics hle: the NVN-HLE answers
+# nvnBootstrapLoader, the driver's nv:: setup is skipped, 3 frames.
+debug: main: first graphics call
+debug: main: frames rendered through NVN: ok
+debug: sdk: nnMain returned
+start: sdk
+exit: ExitProcess
+nvn: frames 3, procs *
+unresolved imports: 0
+unresolved branch targets: 0

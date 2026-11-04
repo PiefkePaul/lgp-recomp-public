@@ -1,0 +1,7 @@
+# lgp_boot_sdkpair_app --app --save <data>/saves-2 --menu-script play: the
+# start screen preselects slot 2 (the folder --save names), not slot 1, and
+# settings.ini keeps its saves = (a one-off --save is not stored).
+menu: play
+app: save slot 2 *
+start: sdk
+exit: ExitProcess

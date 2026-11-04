@@ -1,0 +1,15 @@
+# cmake -DFILE=<file> [-DABSENT=<text>] [-DPRESENT=<text>] -P check_file_absent.cmake:
+# fails if the file is missing, contains ABSENT or lacks PRESENT.
+file(READ "${FILE}" _content)
+if(DEFINED ABSENT)
+    string(FIND "${_content}" "${ABSENT}" _at)
+    if(NOT _at EQUAL -1)
+        message(FATAL_ERROR "${FILE} contains '${ABSENT}':\n${_content}")
+    endif()
+endif()
+if(DEFINED PRESENT)
+    string(FIND "${_content}" "${PRESENT}" _at)
+    if(_at EQUAL -1)
+        message(FATAL_ERROR "${FILE} lacks '${PRESENT}':\n${_content}")
+    endif()
+endif()

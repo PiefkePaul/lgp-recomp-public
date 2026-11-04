@@ -1,0 +1,14 @@
+# lgp_boot_sdkpair_app --app --menu-script play,pause@2,backup,resume@20 with
+# LGP_WEBGPU_ASYNC_EXECUTE=0: the game stands at its second present until the
+# pause menu took it (MenuGate), backup and resume, then the third frame.
+menu: play
+app: save slot 1 *
+menu: pause
+menu: game paused in *
+menu: game stands at frame 2, 2 shown
+menu: backup
+menu: backup *
+menu: resume
+start: sdk
+exit: ExitProcess
+nvn: frames 3*

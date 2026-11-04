@@ -1,0 +1,303 @@
+diff --git a/wgpu-core/src/device/resource.rs b/wgpu-core/src/device/resource.rs
+index 73043f2..672b9fd 100644
+--- a/wgpu-core/src/device/resource.rs
++++ b/wgpu-core/src/device/resource.rs
+@@ -2327,8 +2327,12 @@ impl Device {
+         }
+ 
+         profiling::scope!("naga::validate");
++        // LGP patch: Metal and Vulkan keep only the source when lazy_naga_ir_enabled.
++        let keep_source = self.instance_flags.contains(wgt::InstanceFlags::DEBUG)
++            || (matches!(self.backend(), wgt::Backend::Metal | wgt::Backend::Vulkan)
++                && hal::lazy_naga_ir_enabled());
+         let debug_source =
+-            if self.instance_flags.contains(wgt::InstanceFlags::DEBUG) && !source.is_empty() {
++            if keep_source && !source.is_empty() {
+                 Some(hal::DebugSource {
+                     file_name: Cow::Owned(
+                         desc.label
+diff --git a/wgpu-hal/Cargo.toml b/wgpu-hal/Cargo.toml
+index 3026526..2028670 100644
+--- a/wgpu-hal/Cargo.toml
++++ b/wgpu-hal/Cargo.toml
+@@ -73,6 +73,8 @@ unexpected_cfgs = { level = "warn", check-cfg = [
+ metal = [
+     # Metal is only available on Apple platforms, therefore request MSL output also only if we target an Apple platform.
+     "naga/msl-out",
++    # LGP: shader modules keep only their WGSL text (lazy_naga_ir_enabled).
++    "naga/wgsl-in",
+     "dep:arrayvec",
+     "dep:block2",
+     "dep:bytemuck",
+@@ -90,6 +92,8 @@ metal = [
+ ]
+ vulkan = [
+     "naga/spv-out",
++    # LGP: shader modules keep only their WGSL text (lazy_naga_ir_enabled).
++    "naga/wgsl-in",
+     "dep:android_system_properties",
+     "dep:arrayvec",
+     "dep:ash",
+diff --git a/wgpu-hal/src/lib.rs b/wgpu-hal/src/lib.rs
+index 3f36e67..7da6284 100644
+--- a/wgpu-hal/src/lib.rs
++++ b/wgpu-hal/src/lib.rs
+@@ -264,6 +264,41 @@ pub mod noop;
+ pub mod vulkan;
+ 
+ pub mod auxil;
++
++/// LGP patch: whether backends that support it keep only a shader module's
++/// WGSL text and re-parse it per pipeline, instead of holding the naga IR and
++/// its `ModuleInfo` for the module's lifetime (Metal; Vulkan for modules it
++/// keeps as IR). On unless the environment sets `LGP_WGPU_LAZY_IR=0`.
++pub fn lazy_naga_ir_enabled() -> bool {
++    #[cfg(any(metal, vulkan))]
++    {
++        static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
++        *ENABLED.get_or_init(|| std::env::var("LGP_WGPU_LAZY_IR").map_or(true, |v| v != "0"))
++    }
++    #[cfg(not(any(metal, vulkan)))]
++    false
++}
++
++/// LGP patch: the IR and analysis of a module kept as WGSL text. wgpu-core
++/// validated it with its device's capabilities when the module was made, so
++/// all capabilities are allowed here; the analysis does not depend on them.
++#[cfg(any(metal, vulkan))]
++pub(crate) fn reparse_wgsl(
++    source: &DebugSource,
++) -> Result<(naga::Module, naga::valid::ModuleInfo), String> {
++    profiling::scope!("naga::reparse_wgsl");
++    let module = naga::front::wgsl::parse_str(&source.source_code)
++        .map_err(|e| e.emit_to_string(&source.source_code))?;
++    let info = naga::valid::Validator::new(
++        naga::valid::ValidationFlags::all(),
++        naga::valid::Capabilities::all(),
++    )
++    .subgroup_stages(naga::valid::ShaderStages::all())
++    .subgroup_operations(naga::valid::SubgroupOperationSet::all())
++    .validate(&module)
++    .map_err(|e| alloc::format!("{:?}", e.into_inner()))?;
++    Ok((module, info))
++}
+ pub mod api {
+     #[cfg(dx12)]
+     pub use super::dx12::Api as Dx12;
+diff --git a/wgpu-hal/src/metal/device.rs b/wgpu-hal/src/metal/device.rs
+index 5000ec0..91fc5c0 100644
+--- a/wgpu-hal/src/metal/device.rs
++++ b/wgpu-hal/src/metal/device.rs
+@@ -1,4 +1,4 @@
+-use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
++use alloc::{borrow::ToOwned as _, format, sync::Arc, vec::Vec};
+ use core::{ptr::NonNull, sync::atomic};
+ use std::{thread, time};
+ 
+@@ -144,11 +144,24 @@ impl super::Device {
+         naga_stage: naga::ShaderStage,
+     ) -> Result<CompiledShader, crate::PipelineError> {
+         match stage.module.source {
+-            ShaderModuleSource::Naga(ref naga_shader) => {
++            ShaderModuleSource::Naga(_) | ShaderModuleSource::Wgsl(_) => {
+                 let stage_bit = map_naga_stage(naga_stage);
++                let reparsed;
++                let (naga_module, naga_info) = match stage.module.source {
++                    ShaderModuleSource::Naga(ref naga_shader) => {
++                        (&*naga_shader.module, &naga_shader.info)
++                    }
++                    ShaderModuleSource::Wgsl(ref source) => {
++                        reparsed = crate::reparse_wgsl(source).map_err(|e| {
++                            crate::PipelineError::Linkage(stage_bit, format!("WGSL: {e}"))
++                        })?;
++                        (&reparsed.0, &reparsed.1)
++                    }
++                    ShaderModuleSource::Passthrough(_) => unreachable!(),
++                };
+                 let (module, module_info) = naga::back::pipeline_constants::process_overrides(
+-                    &naga_shader.module,
+-                    &naga_shader.info,
++                    naga_module,
++                    naga_info,
+                     Some((naga_stage, stage.entry_point)),
+                     stage.constants,
+                 )
+@@ -1146,7 +1159,16 @@ impl crate::Device for super::Device {
+ 
+         match shader {
+             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
+-                source: ShaderModuleSource::Naga(naga),
++                // LGP patch: drop the IR and its analysis when the text is here.
++                source: match naga.debug_source {
++                    Some(source) if crate::lazy_naga_ir_enabled() => {
++                        ShaderModuleSource::Wgsl(source)
++                    }
++                    debug_source => ShaderModuleSource::Naga(crate::NagaShader {
++                        debug_source,
++                        ..naga
++                    }),
++                },
+                 bounds_checks: desc.runtime_checks,
+             }),
+             crate::ShaderInput::MetalLib {
+diff --git a/wgpu-hal/src/metal/mod.rs b/wgpu-hal/src/metal/mod.rs
+index 5006048..3fea80c 100644
+--- a/wgpu-hal/src/metal/mod.rs
++++ b/wgpu-hal/src/metal/mod.rs
+@@ -874,6 +874,8 @@ unsafe impl Sync for BindGroup {}
+ #[derive(Debug)]
+ pub enum ShaderModuleSource {
+     Naga(crate::NagaShader),
++    /// LGP patch: WGSL text, parsed and validated again for each pipeline.
++    Wgsl(crate::DebugSource),
+     Passthrough(PassthroughShader),
+ }
+ 
+diff --git a/wgpu-hal/src/vulkan/device.rs b/wgpu-hal/src/vulkan/device.rs
+index c72a986..4da9b67 100644
+--- a/wgpu-hal/src/vulkan/device.rs
++++ b/wgpu-hal/src/vulkan/device.rs
+@@ -640,10 +640,29 @@ impl super::Device {
+         let stage_flags = crate::auxil::map_naga_stage(naga_stage);
+         let vk_module = match *stage.module {
+             super::ShaderModule::Raw(raw) => raw,
+-            super::ShaderModule::Intermediate {
+-                ref naga_shader,
+-                runtime_checks,
+-            } => {
++            super::ShaderModule::Intermediate { .. } | super::ShaderModule::Wgsl { .. } => {
++                let reparsed;
++                let (naga_module, naga_info, debug_source, runtime_checks) = match *stage.module {
++                    super::ShaderModule::Intermediate {
++                        ref naga_shader,
++                        runtime_checks,
++                    } => (
++                        &*naga_shader.module,
++                        &naga_shader.info,
++                        naga_shader.debug_source.as_ref(),
++                        runtime_checks,
++                    ),
++                    super::ShaderModule::Wgsl {
++                        ref source,
++                        runtime_checks,
++                    } => {
++                        reparsed = crate::reparse_wgsl(source).map_err(|e| {
++                            crate::PipelineError::Linkage(stage_flags, format!("WGSL: {e}"))
++                        })?;
++                        (&reparsed.0, &reparsed.1, None, runtime_checks)
++                    }
++                    super::ShaderModule::Raw(_) => unreachable!(),
++                };
+                 let pipeline_options = naga::back::spv::PipelineOptions {
+                     entry_point: stage.entry_point.to_owned(),
+                     shader_stage: naga_stage,
+@@ -652,7 +671,7 @@ impl super::Device {
+                     || !runtime_checks.force_loop_bounding
+                     || !runtime_checks.ray_query_initialization_tracking
+                     || !binding_map.is_empty()
+-                    || naga_shader.debug_source.is_some()
++                    || debug_source.is_some()
+                     || !stage.zero_initialize_workgroup_memory
+                     || !runtime_checks.task_shader_dispatch_tracking
+                     || !runtime_checks.mesh_shader_primitive_indices_clamp;
+@@ -678,7 +697,7 @@ impl super::Device {
+                         temp_options.binding_map = binding_map.clone();
+                     }
+ 
+-                    if let Some(ref debug) = naga_shader.debug_source {
++                    if let Some(debug) = debug_source {
+                         temp_options.debug_info = Some(naga::back::spv::DebugInfo {
+                             source_code: &debug.source_code,
+                             file_name: debug.file_name.as_ref(),
+@@ -701,8 +720,8 @@ impl super::Device {
+                 };
+ 
+                 let (module, info) = naga::back::pipeline_constants::process_overrides(
+-                    &naga_shader.module,
+-                    &naga_shader.info,
++                    naga_module,
++                    naga_info,
+                     Some((naga_stage, stage.entry_point)),
+                     stage.constants,
+                 )
+@@ -738,7 +757,9 @@ impl super::Device {
+             _entry_point: entry_point,
+             temp_raw_module: match *stage.module {
+                 super::ShaderModule::Raw(_) => None,
+-                super::ShaderModule::Intermediate { .. } => Some(vk_module),
++                super::ShaderModule::Intermediate { .. } | super::ShaderModule::Wgsl { .. } => {
++                    Some(vk_module)
++                }
+             },
+         })
+     }
+@@ -1727,6 +1748,12 @@ impl crate::Device for super::Device {
+         desc: &crate::ShaderModuleDescriptor,
+         shader: crate::ShaderInput,
+     ) -> Result<super::ShaderModule, crate::ShaderError> {
++        // LGP patch: wgpu-core hands the source over without InstanceFlags::DEBUG
++        // too (lazy_naga_ir_enabled); only with DEBUG does it go into the SPIR-V.
++        let debug = self
++            .naga_options
++            .flags
++            .contains(naga::back::spv::WriterFlags::DEBUG);
+         let shader_module = match shader {
+             crate::ShaderInput::Naga(naga_shader)
+                 if self
+@@ -1735,9 +1762,20 @@ impl crate::Device for super::Device {
+                     .contains(super::Workarounds::SEPARATE_ENTRY_POINTS)
+                     || !naga_shader.module.overrides.is_empty() =>
+             {
+-                super::ShaderModule::Intermediate {
+-                    naga_shader,
+-                    runtime_checks: desc.runtime_checks,
++                match naga_shader.debug_source {
++                    Some(source) if !debug && crate::lazy_naga_ir_enabled() => {
++                        super::ShaderModule::Wgsl {
++                            source,
++                            runtime_checks: desc.runtime_checks,
++                        }
++                    }
++                    debug_source => super::ShaderModule::Intermediate {
++                        naga_shader: crate::NagaShader {
++                            debug_source: debug_source.filter(|_| debug),
++                            ..naga_shader
++                        },
++                        runtime_checks: desc.runtime_checks,
++                    },
+                 }
+             }
+             crate::ShaderInput::Naga(naga_shader) => {
+@@ -1746,6 +1784,7 @@ impl crate::Device for super::Device {
+                     naga_shader
+                         .debug_source
+                         .as_ref()
++                        .filter(|_| debug)
+                         .map(|d| naga::back::spv::DebugInfo {
+                             source_code: d.source_code.as_ref(),
+                             file_name: d.file_name.as_ref(),
+@@ -1788,7 +1827,7 @@ impl crate::Device for super::Device {
+             super::ShaderModule::Raw(raw) => {
+                 unsafe { self.shared.raw.destroy_shader_module(raw, None) };
+             }
+-            super::ShaderModule::Intermediate { .. } => {}
++            super::ShaderModule::Intermediate { .. } | super::ShaderModule::Wgsl { .. } => {}
+         }
+ 
+         self.counters.shader_modules.sub(1);
+diff --git a/wgpu-hal/src/vulkan/mod.rs b/wgpu-hal/src/vulkan/mod.rs
+index 2fbb629..6926f64 100644
+--- a/wgpu-hal/src/vulkan/mod.rs
++++ b/wgpu-hal/src/vulkan/mod.rs
+@@ -1056,6 +1056,11 @@ pub enum ShaderModule {
+         naga_shader: crate::NagaShader,
+         runtime_checks: wgt::ShaderRuntimeChecks,
+     },
++    /// LGP patch: WGSL text, parsed and validated again for each pipeline.
++    Wgsl {
++        source: crate::DebugSource,
++        runtime_checks: wgt::ShaderRuntimeChecks,
++    },
+ }
+ 
+ impl crate::DynShaderModule for ShaderModule {}

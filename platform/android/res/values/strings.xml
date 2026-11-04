@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Texts of the game import (GameImport.java), English; German in
+     values-de/strings.xml. The app's own menus and dialogs take theirs from
+     platform/src/ui_text.cpp. -->
+<resources>
+    <string name="import_choose_folder">Choose folder</string>
+    <string name="import_quit">Quit</string>
+    <string name="import_unreadable">The folder cannot be read: %1$s</string>
+    <string name="import_no_app_folder">No app folder: %1$s</string>
+    <string name="import_no_space">Not enough free storage: %1$s needed, %2$s free.</string>
+    <string name="import_copying">Copying game data</string>
+    <string name="import_cancel">Cancel</string>
+    <string name="import_copy_failed">Copying failed: %1$s</string>
+    <string name="import_several_games">The chosen folder holds several games. Please choose the folder with exefs directly.</string>
+    <string name="import_no_exefs">The chosen folder lacks the subfolder exefs. Please choose the folder that holds exefs and romfs (or romfs.bin).</string>
+    <string name="import_exefs_empty">The folder exefs is empty.</string>
+    <string name="import_no_romfs">romfs (folder) or romfs.bin is missing next to exefs.</string>
+    <string name="import_progress">%1$s of %2$s\n%3$s</string>
+</resources>

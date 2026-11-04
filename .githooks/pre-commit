@@ -1,0 +1,18 @@
+#!/bin/sh
+# Game-data guard. Activated by `git config core.hooksPath .githooks`
+# (CMake configure does this automatically, see CMakeLists.txt).
+# Fails closed: without a Python interpreter the commit is refused.
+repo_root=$(git rev-parse --show-toplevel) || exit 2
+guard="$repo_root/tools/guard/check_game_data.py"
+
+for py in python3 python; do
+    if command -v "$py" >/dev/null 2>&1 && "$py" -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null; then
+        exec "$py" "$guard" --staged
+    fi
+done
+if command -v py >/dev/null 2>&1; then
+    exec py -3 "$guard" --staged
+fi
+
+echo "game-data guard: no Python 3 found, refusing commit." >&2
+exit 1

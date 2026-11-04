@@ -1,0 +1,7 @@
+# lgp_boot_sdkpair_app --app --menu-script play with saves = <own folder> in
+# settings.ini: the start screen offers that folder first and the game uses it
+# (no save slot replaces it).
+menu: play
+app: save folder *
+start: sdk
+exit: ExitProcess

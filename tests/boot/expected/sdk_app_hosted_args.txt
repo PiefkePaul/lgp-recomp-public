@@ -1,0 +1,10 @@
+# lgp_boot_sdkpair_hosted (LGP_BOOT_APP_LOG_ALWAYS, like the iOS/Android app)
+# with plain options and LGP_APP_DIR: the log in <app folder>/logs/lgp.log
+# holds the run of sdk_graphics_hle_frames.txt with the relative --exefs.
+app: arguments --exefs exefs --graphics hle --frames 2
+app: working directory *
+debug: main: first graphics call
+start: sdk
+exit: ExitProcess
+nvn: frames 2 (limit), procs *
+lgp_boot: exit code 0

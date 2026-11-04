@@ -1,0 +1,36 @@
+# The services fixture (tests/fixtures/services) through the boot program.
+debug: sm: ok
+debug: applet: ok
+debug: applet in focus: ok
+debug: set: ok
+debug: set language: ok
+debug: set language is de: ok
+debug: time: ok
+debug: time current: ok
+debug: time is the configured one: ok
+debug: csrng: ok
+debug: csrng bytes: ok
+debug: acc: ok
+debug: acc preselected user: ok
+debug: acc user valid: ok
+debug: acc profile: ok
+debug: acc profile get: ok
+debug: acc nickname: ok
+debug: fs: ok
+debug: romfs mount: ok
+debug: romfs read hello.txt: ok
+debug: romfs read dir/nested.bin: ok
+debug: romfs missing file: ok
+debug: save open: ok
+debug: save create file: ok
+debug: save open file: ok
+debug: save write: ok
+debug: save read: ok
+debug: save read back: ok
+debug: save commit: ok
+debug: swkbd create: ok
+debug: swkbd show: ok
+debug: swkbd text: ok
+debug: services: all checks passed
+start: homebrew
+exit: ExitProcess

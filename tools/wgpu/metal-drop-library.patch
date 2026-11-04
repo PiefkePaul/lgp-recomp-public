@@ -1,0 +1,77 @@
+diff --git a/wgpu-hal/src/metal/device.rs b/wgpu-hal/src/metal/device.rs
+index 5000ec0..9a457d2 100644
+--- a/wgpu-hal/src/metal/device.rs
++++ b/wgpu-hal/src/metal/device.rs
+@@ -1340,7 +1340,7 @@ impl crate::Device for super::Device {
+                             sizes_slot: desc.layout.per_stage_map.vs.sizes_buffer,
+                             sized_bindings: vs.sized_bindings,
+                             vertex_buffer_mappings,
+-                            library: Some(vs.library),
++                            library: super::keep_stage_library().then_some(vs.library),
+                             raw_wg_size: MTLSize {
+                                 width: 0,
+                                 height: 0,
+@@ -1443,7 +1443,7 @@ impl crate::Device for super::Device {
+                             sizes_slot: desc.layout.per_stage_map.ts.sizes_buffer,
+                             sized_bindings: ts.sized_bindings,
+                             vertex_buffer_mappings: vec![],
+-                            library: Some(ts.library),
++                            library: super::keep_stage_library().then_some(ts.library),
+                             raw_wg_size: ts.wg_size,
+                             work_group_memory_sizes: ts.wg_memory_sizes,
+                         });
+@@ -1472,7 +1472,7 @@ impl crate::Device for super::Device {
+                             sizes_slot: desc.layout.per_stage_map.ms.sizes_buffer,
+                             sized_bindings: ms.sized_bindings,
+                             vertex_buffer_mappings: vec![],
+-                            library: Some(ms.library),
++                            library: super::keep_stage_library().then_some(ms.library),
+                             raw_wg_size: ms.wg_size,
+                             work_group_memory_sizes: ms.wg_memory_sizes,
+                         });
+@@ -1515,7 +1515,7 @@ impl crate::Device for super::Device {
+                         sizes_slot: desc.layout.per_stage_map.fs.sizes_buffer,
+                         sized_bindings: fs.sized_bindings,
+                         vertex_buffer_mappings: vec![],
+-                        library: Some(fs.library),
++                        library: super::keep_stage_library().then_some(fs.library),
+                         raw_wg_size: MTLSize {
+                             width: 0,
+                             height: 0,
+@@ -1717,7 +1717,7 @@ impl crate::Device for super::Device {
+             }
+ 
+             let cs_info = super::PipelineStageInfo {
+-                library: Some(cs.library),
++                library: super::keep_stage_library().then_some(cs.library),
+                 immediates: desc.layout.immediates_infos.cs,
+                 sizes_slot: desc.layout.per_stage_map.cs.sizes_buffer,
+                 sized_bindings: cs.sized_bindings,
+diff --git a/wgpu-hal/src/metal/mod.rs b/wgpu-hal/src/metal/mod.rs
+index 5006048..faff32c 100644
+--- a/wgpu-hal/src/metal/mod.rs
++++ b/wgpu-hal/src/metal/mod.rs
+@@ -894,6 +894,14 @@ pub struct ShaderModule {
+ 
+ impl crate::DynShaderModule for ShaderModule {}
+ 
++/// LGP patch: whether a pipeline keeps the `MTLLibrary` of each stage after
++/// its pipeline state is built (nothing reads it then). Kept unless the
++/// environment sets `LGP_WGPU_METAL_DROP_LIBRARY=1`.
++fn keep_stage_library() -> bool {
++    static KEEP: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
++    *KEEP.get_or_init(|| std::env::var("LGP_WGPU_METAL_DROP_LIBRARY").map_or(true, |v| v != "1"))
++}
++
+ #[derive(Debug)]
+ struct PipelineStageInfo {
+     #[allow(dead_code)]
+@@ -963,7 +971,7 @@ impl PipelineStageInfo {
+         self.vertex_buffer_mappings.clear();
+         self.vertex_buffer_mappings
+             .extend_from_slice(&other.vertex_buffer_mappings);
+-        self.library = Some(other.library.as_ref().unwrap().clone());
++        self.library = other.library.clone();
+         self.raw_wg_size = other.raw_wg_size;
+         self.work_group_memory_sizes.clear();
+         self.work_group_memory_sizes

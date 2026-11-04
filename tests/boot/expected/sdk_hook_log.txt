@@ -1,0 +1,12 @@
+# lgp_boot_sdkpair --graphics hle --frames 2 --hook-log 3: the pair is lifted
+# with a hook door on nnMain, called once, and on the sdk's 5 profanity
+# filter methods (lgp/recomp/sdk_hooks.hpp), which the profanity filter
+# stand-in takes over after the hook log is installed.
+debug: main: first graphics call
+start: sdk
+exit: ExitProcess
+nvn: frames 2 (limit), procs *
+mods: hook log: 6 doors, first 3 calls each
+hook log: 1 calls
+unresolved imports: 0
+unresolved branch targets: 0

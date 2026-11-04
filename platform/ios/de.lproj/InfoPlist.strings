@@ -1,0 +1,3 @@
+/* German texts of Info.plist.in (the plist holds the English ones). */
+"NSBluetoothAlwaysUsageDescription" = "Bluetooth wird für Controller gebraucht.";
+"NSLocalNetworkUsageDescription" = "Zum Tauschen und Kämpfen mit einem anderen Gerät im selben WLAN.";

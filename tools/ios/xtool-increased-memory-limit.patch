@@ -1,0 +1,41 @@
+diff --git a/Sources/XKit/DeveloperServices/App IDs/Entitlements/DeveloperServicesCapability.swift b/Sources/XKit/DeveloperServices/App IDs/Entitlements/DeveloperServicesCapability.swift
+index 1d12254..0101dfa 100644
+--- a/Sources/XKit/DeveloperServices/App IDs/Entitlements/DeveloperServicesCapability.swift	
++++ b/Sources/XKit/DeveloperServices/App IDs/Entitlements/DeveloperServicesCapability.swift	
+@@ -160,3 +160,10 @@ extension WiFiAwareEntitlement: EntitlementWithCapability {
+         DeveloperServicesCapability(rawName: "WIFI_AWARE", isFree: false)
+     }
+ }
++
++// Granted to free teams too (XCODE_FREE_PROGRAM in Xcode's portal capability list).
++extension IncreasedMemoryLimitEntitlement: EntitlementWithCapability {
++    var capability: DeveloperServicesCapability {
++        DeveloperServicesCapability(rawName: "INCREASED_MEMORY_LIMIT", isFree: true)
++    }
++}
+diff --git a/Sources/XKit/Model/Entitlements/EntitlementTypes.swift b/Sources/XKit/Model/Entitlements/EntitlementTypes.swift
+index 7bc1ea5..d04f8d1 100644
+--- a/Sources/XKit/Model/Entitlements/EntitlementTypes.swift
++++ b/Sources/XKit/Model/Entitlements/EntitlementTypes.swift
+@@ -27,6 +27,7 @@ extension EntitlementContainer {
+         InterAppAudioEntitlement.self,
+         WirelessAccessoryEntitlement.self,
+         WiFiAwareEntitlement.self,
++        IncreasedMemoryLimitEntitlement.self,
+         HomeKitEntitlement.self,
+         HealthKitEntitlement.self,
+         AppleSignInEntitlement.self,
+@@ -172,6 +173,13 @@ public struct WirelessAccessoryEntitlement: Entitlement, RawRepresentable {
+     public init(rawValue: Bool) { self.rawValue = rawValue }
+ }
+ 
++public struct IncreasedMemoryLimitEntitlement: Entitlement, RawRepresentable {
++    public static let identifier = "com.apple.developer.kernel.increased-memory-limit"
++
++    public var rawValue: Bool
++    public init(rawValue: Bool) { self.rawValue = rawValue }
++}
++
+ public struct WiFiAwareEntitlement: Entitlement, RawRepresentable {
+     public static let identifier = "com.apple.developer.wifi-aware"
+ 

@@ -1,0 +1,7 @@
+# lgp_boot_sdkpair_app --app --ldn off --menu-script play with the
+# online-button file in --mods-dir: the explicit off wins, no server, no mod.
+menu: play
+app: save slot 1 *
+app: ldn off
+start: sdk
+exit: ExitProcess

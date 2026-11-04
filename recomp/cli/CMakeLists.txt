@@ -1,0 +1,5 @@
+add_executable(lgp_recomp main.cpp)
+target_link_libraries(lgp_recomp PRIVATE lgp_recomp_core)
+if(NOT MSVC)
+    target_compile_options(lgp_recomp PRIVATE -Wall -Wextra)
+endif()

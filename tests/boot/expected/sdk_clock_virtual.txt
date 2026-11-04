@@ -1,0 +1,9 @@
+# boot.sdk_clock_virtual: the same lines on every run (virtual guest clock).
+clock: virtual, sched baton, time 1767225600
+input: script (2 presses)
+input: press 1 at frame 2, 0.03 s
+input: press 2 at frame 2, 0.03 s
+debug: main: frames rendered through NVN: ok
+debug: sdk: nnMain returned
+exit: ExitProcess
+nvn: frames 3, procs 48 (48 implemented), unimplemented called 0

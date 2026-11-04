@@ -1,0 +1,7 @@
+# lgp_boot_sdkpair_app --app --menu-script play with smoothing = fxaa in
+# settings.ini: the window renderer scales the game image with FXAA
+# (--smoothing fxaa) and the game runs to its end without WebGPU errors.
+smoothing: fxaa
+menu: play
+start: sdk
+exit: ExitProcess

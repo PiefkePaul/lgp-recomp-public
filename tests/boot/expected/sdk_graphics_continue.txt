@@ -1,0 +1,12 @@
+# lgp_boot_sdkpair --exefs <dir> --graphics continue: the sdk's own
+# driver functions run, nnMain returns, nn::init::Start exits.
+debug: main: first graphics call
+debug: sdk: driver nv::SetGraphicsAllocator ran
+debug: sdk: driver nv::InitializeGraphics ran
+debug: sdk: driver nvnBootstrapLoader called after start: ok
+debug: main: no NVN driver answer
+debug: sdk: nnMain returned
+start: sdk
+exit: ExitProcess
+unresolved imports: 0
+unresolved branch targets: 0

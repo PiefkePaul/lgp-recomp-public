@@ -1,0 +1,14 @@
+# lgp_boot_sdkpair_app --app --menu-script play,docked@1,handheld@2 with
+# docked = 0 in settings.ini: the game starts handheld, goes to TV mode at its
+# first present and back at its second (am queues OperationModeChanged and
+# PerformanceModeChanged each time; "TV mode"/"handheld mode" only print when
+# the running process took the change).
+menu: play
+app: save slot 1 *
+menu: settings changed
+menu: TV mode
+menu: settings changed
+menu: handheld mode
+start: sdk
+exit: ExitProcess
+nvn: frames 3*

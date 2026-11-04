@@ -1,0 +1,2 @@
+# browser.webgpu_demo_gpu_thread: the renderer really took its own thread.
+webgpu thread: own GPU thread

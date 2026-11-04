@@ -1,0 +1,153 @@
+<!doctype html>
+<!-- P6: what the browser offers the web build, one line per feature, then
+     "exit code 0". Run through browser_test.mjs (any --browser); the test only
+     requires the features the web build cannot work without (cross-origin
+     isolation, SharedArrayBuffer, Atomics.wait in workers, OPFS sync access
+     handles in workers, WebAssembly exceptions and tail calls, a shared Wasm memory of
+     3750 MiB). The other lines document
+     differences between browsers (docs/knowledge/safari-als-zielbrowser.md). -->
+<html lang="en">
+<head><meta charset="utf-8"><title>lgp feature probe</title></head>
+<body>
+<canvas id="canvas" width="64" height="36"></canvas>
+<script>
+(async () => {
+  const lines = [];
+  const say = (k, v) => { const t = `probe: ${k}: ${v}`; lines.push(t); console.log(t); };
+  let required = true;
+  const need = (k, ok, detail) => { say(k, (ok ? 'yes' : 'NO') + (detail ? ` (${detail})` : '')); required = required && ok; };
+  const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r('timeout'), ms))]);
+
+  say('user agent', navigator.userAgent);
+  need('crossOriginIsolated', self.crossOriginIsolated === true);
+  need('SharedArrayBuffer', typeof SharedArrayBuffer === 'function');
+  // WebAssembly exceptions (-fwasm-exceptions): a module with a tag section.
+  const tagModule = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 13, 3, 1, 0, 0]);
+  need('wasm exceptions', WebAssembly.validate(tagModule));
+  // WebAssembly tail calls (-mtail-call, lifted code): a function whose body is
+  // return_call 0. Without them the game module does not compile.
+  need('wasm tail calls', WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 2, 1, 0, 10, 6, 1, 4, 0, 18, 0, 11])));
+  say('wasm memory64', WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 5, 3, 1, 4, 1])) ? 'yes' : 'no');
+
+  // Shared Wasm memory as the boot program uses it (-pthread,
+  // ALLOW_MEMORY_GROWTH, MAXIMUM_MEMORY=4GB): the game needs about 3.7 GiB
+  // (ADR-0001: 3072 MiB guest memory plus the host side). Grown in steps
+  // like malloc does; pages are only reserved, not touched.
+  try {
+    const mem = new WebAssembly.Memory({ initial: 256, maximum: 65536, shared: true });
+    let pages = 256;
+    const want = 60000;  // 3750 MiB
+    try { while (pages < want) { mem.grow(Math.min(4096, want - pages)); pages = mem.buffer.byteLength / 65536; } } catch (e) {}
+    need('shared Wasm memory grows to 3750 MiB', pages >= want, `${pages / 16} MiB`);
+  } catch (e) { need('shared Wasm memory grows to 3750 MiB', false, String(e)); }
+
+  // Worker: Atomics.wait and OPFS createSyncAccessHandle (WasmFS OPFS backend).
+  const workerSrc = `
+    onmessage = async () => {
+      const r = { gpu: 'gpu' in navigator && !!navigator.gpu ? 'yes' : 'no' };
+      try { const i = new Int32Array(new SharedArrayBuffer(4)); r.wait = Atomics.wait(i, 0, 0, 1); } catch (e) { r.wait = 'error ' + e; }
+      try {
+        const root = await navigator.storage.getDirectory();
+        const dir = await root.getDirectoryHandle('lgp-probe', { create: true });
+        const f = await dir.getFileHandle('x.bin', { create: true });
+        const h = await f.createSyncAccessHandle();
+        h.write(new Uint8Array([1, 2, 3]), { at: 0 }); h.flush();
+        r.sync = h.getSize() === 3 ? 'yes' : 'size ' + h.getSize();
+        h.close();
+        r.move = typeof dir.move === 'function' ? 'yes' : 'no';
+        if (typeof dir.move === 'function') {
+          const sub = await dir.getDirectoryHandle('a', { create: true });
+          try { await sub.move(dir, 'b'); r.dirMove = 'yes'; } catch (e) { r.dirMove = 'no (' + e.name + ')'; }
+        }
+        try { await f.move('y.bin'); r.fileMove = 'yes'; } catch (e) { r.fileMove = 'no (' + e.name + ')'; }
+        await root.removeEntry('lgp-probe', { recursive: true });
+      } catch (e) { r.sync = 'error ' + e; }
+      postMessage(r);
+    };`;
+  const w = new Worker(URL.createObjectURL(new Blob([workerSrc], { type: 'text/javascript' })));
+  const wr = await withTimeout(new Promise((res) => { w.onmessage = (e) => res(e.data); w.postMessage(0); }), 5000);
+  w.terminate();
+  need('Atomics.wait in a worker', wr !== 'timeout' && wr.wait === 'timed-out', wr === 'timeout' ? 'timeout' : wr.wait);
+  need('OPFS sync access handle in a worker', wr !== 'timeout' && wr.sync === 'yes', wr === 'timeout' ? 'timeout' : wr.sync);
+  if (wr !== 'timeout') {
+    say('OPFS handle.move', wr.move);
+    say('OPFS directory move', wr.dirMove || 'n/a');
+    say('OPFS file rename', wr.fileMove);
+    say('WebGPU in a worker', wr.gpu);
+  }
+  try {
+    const est = await navigator.storage.estimate();
+    say('storage quota', `${Math.round(est.quota / 2 ** 20)} MiB`);
+  } catch (e) { say('storage quota', 'error ' + e); }
+  say('storage persisted', navigator.storage.persisted ? await navigator.storage.persisted() : 'n/a');
+  say('webkitdirectory', 'webkitdirectory' in document.createElement('input') ? 'yes' : 'no');
+  say('showDirectoryPicker', typeof window.showDirectoryPicker === 'function' ? 'yes' : 'no');
+
+  // WebGPU
+  if (!navigator.gpu) {
+    say('WebGPU', 'no navigator.gpu');
+  } else {
+    // Firefox rejects requestAdapter() where WebGPU is not shipped (Linux
+    // release builds before WebGPU shipped there): report it, do not abort.
+    const ad = await withTimeout(navigator.gpu.requestAdapter().catch((e) => 'error ' + e), 5000);
+    if (!ad || ad === 'timeout' || typeof ad === 'string') {
+      say('WebGPU', 'no adapter' + (typeof ad === 'string' ? ` (${ad})` : ''));
+    } else {
+      const info = ad.info || {};
+      say('WebGPU adapter', `${info.vendor || '?'} ${info.architecture || ''} ${info.description || ''}`.trim());
+      say('WebGPU features', [...ad.features].sort().join(',') || 'none');
+      const l = ad.limits;
+      say('WebGPU limits', `maxTextureDimension2D ${l.maxTextureDimension2D}, maxStorageBufferBindingSize ${l.maxStorageBufferBindingSize}, ` +
+          `maxBufferSize ${l.maxBufferSize}, maxComputeWorkgroupStorageSize ${l.maxComputeWorkgroupStorageSize}, ` +
+          `maxColorAttachments ${l.maxColorAttachments}, maxBindGroups ${l.maxBindGroups}`);
+      say('preferred canvas format', navigator.gpu.getPreferredCanvasFormat());
+      say('OffscreenCanvas webgpu', typeof OffscreenCanvas === 'function' ? 'OffscreenCanvas yes' : 'no OffscreenCanvas');
+    }
+  }
+
+  // Audio
+  if (typeof AudioContext !== 'function') {
+    say('AudioContext', 'no');
+  } else {
+    const ctx = new AudioContext({ sampleRate: 48000 });
+    say('AudioContext state without gesture', ctx.state);
+    // Firefox creates every context 'suspended' and starts it asynchronously
+    // once the audio output is open: the state up to 3 s later is the answer.
+    const t0 = performance.now();
+    while (ctx.state !== 'running' && performance.now() - t0 < 3000) await new Promise((r) => setTimeout(r, 50));
+    say('AudioContext state later', `${ctx.state} after ${Math.round(performance.now() - t0)} ms`);
+    say('AudioContext sampleRate', ctx.sampleRate);
+    say('AudioWorklet', ctx.audioWorklet ? 'yes' : 'no');
+    if (ctx.audioWorklet) {
+      const src = 'registerProcessor("p", class extends AudioWorkletProcessor { process() { return true; } });';
+      const r = await withTimeout(ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })))
+        .then(() => 'yes', (e) => 'error ' + e), 3000);
+      say('AudioWorklet addModule (blob URL)', r);
+      try {
+        const node = new AudioWorkletNode(ctx, 'p', { processorOptions: { sab: new SharedArrayBuffer(8) } });
+        say('SharedArrayBuffer into AudioWorklet', node ? 'yes' : 'no');
+      } catch (e) { say('SharedArrayBuffer into AudioWorklet', 'error ' + e); }
+    }
+    ctx.close();
+  }
+
+  // Input
+  say('Gamepad API', typeof navigator.getGamepads === 'function' ? 'yes' : 'no');
+  say('gamepads connected', typeof navigator.getGamepads === 'function' ? navigator.getGamepads().filter(Boolean).length : 'n/a');
+
+  // requestAnimationFrame (stops in hidden tabs and on a locked screen)
+  const frames = await new Promise((res) => {
+    let n = 0; const t0 = performance.now();
+    const tick = () => { ++n; if (performance.now() - t0 < 1000) requestAnimationFrame(tick); else res(n); };
+    requestAnimationFrame(tick);
+    setTimeout(() => res(n), 1500);
+  });
+  say('requestAnimationFrame per second', frames);
+  say('document.visibilityState', document.visibilityState);
+
+  say('required features', required ? 'all present' : 'MISSING');
+  console.log('exit code ' + (required ? 0 : 1));
+})().catch((e) => { console.log('probe failed: ' + e); console.log('exit code 1'); });
+</script>
+</body>
+</html>

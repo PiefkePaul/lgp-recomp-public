@@ -1,0 +1,4 @@
+# lgp_boot_sdkpair_app --app --menu-script settings@30,quit@400 in a window
+# (xvfb): settings on the start screen, then "quit" ends the app before the
+# game starts (no "start: sdk"; a hang would hit the test's timeout).
+menu: quit game

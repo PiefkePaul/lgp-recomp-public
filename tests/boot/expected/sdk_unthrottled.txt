@@ -1,0 +1,3 @@
+# lgp_boot_sdkpair --graphics hle without a window: unthrottled by default.
+present: unthrottled
+nvn: frames 3, procs *

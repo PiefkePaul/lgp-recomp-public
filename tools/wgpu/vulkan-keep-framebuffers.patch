@@ -1,0 +1,111 @@
+diff --git a/wgpu-hal/src/vulkan/command.rs b/wgpu-hal/src/vulkan/command.rs
+index fda5ba8..17de7f1 100644
+--- a/wgpu-hal/src/vulkan/command.rs
++++ b/wgpu-hal/src/vulkan/command.rs
+@@ -38,6 +38,20 @@ impl super::Texture {
+     }
+ }
+ 
++/// LGP patch: with `LGP_WGPU_KEEP_FRAMEBUFFERS=1` an encoder keeps its
++/// framebuffers across `reset_all` instead of destroying all of them, so a
++/// render pass with the same attachments as in an earlier use of the encoder
++/// does not create one again (`vkCreateFramebuffer` per pass). The key holds
++/// the views' identities, which are never reused, so a framebuffer of a
++/// destroyed view is never hit; it goes after `KEEP_FRAMEBUFFER_RESETS`
++/// resets without use, and all go past `MAX_KEPT_FRAMEBUFFERS`.
++fn keep_framebuffers() -> bool {
++    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
++    *ENABLED.get_or_init(|| std::env::var("LGP_WGPU_KEEP_FRAMEBUFFERS").is_ok_and(|v| v == "1"))
++}
++const KEEP_FRAMEBUFFER_RESETS: u32 = 16;
++const MAX_KEPT_FRAMEBUFFERS: usize = 256;
++
+ impl super::CommandEncoder {
+     fn write_pass_end_timestamp_if_requested(&mut self) {
+         if let Some((query_set, index)) = self.end_of_pass_timer_query.take() {
+@@ -56,8 +70,12 @@ impl super::CommandEncoder {
+         &mut self,
+         key: super::FramebufferKey,
+     ) -> Result<vk::Framebuffer, crate::DeviceError> {
++        let resets = self.framebuffer_resets;
+         Ok(match self.framebuffers.entry(key) {
+-            Entry::Occupied(e) => *e.get(),
++            Entry::Occupied(mut e) => {
++                e.get_mut().1 = resets;
++                e.get().0
++            }
+             Entry::Vacant(e) => {
+                 let super::FramebufferKey {
+                     raw_pass,
+@@ -74,7 +92,7 @@ impl super::CommandEncoder {
+                     .attachments(attachment_views);
+ 
+                 let raw = unsafe { self.device.raw.create_framebuffer(&vk_info, None).unwrap() };
+-                *e.insert(raw)
++                e.insert((raw, resets)).0
+             }
+         })
+     }
+@@ -181,8 +199,23 @@ impl crate::CommandEncoder for super::CommandEncoder {
+             .extend(cmd_bufs.into_iter().map(|cmd_buf| cmd_buf.raw));
+         self.free.append(&mut self.discarded);
+         // Delete framebuffers from the framebuffer cache
+-        for (_, framebuffer) in self.framebuffers.drain() {
+-            unsafe { self.device.raw.destroy_framebuffer(framebuffer, None) };
++        // (LGP patch: with keep_framebuffers only those unused for a while;
++        // the command buffers that used them are done, as for all of them).
++        self.framebuffer_resets = self.framebuffer_resets.wrapping_add(1);
++        let resets = self.framebuffer_resets;
++        let keep = keep_framebuffers();
++        let device = &self.device;
++        self.framebuffers.retain(|_, &mut (framebuffer, used)| {
++            let kept = keep && resets.wrapping_sub(used) <= KEEP_FRAMEBUFFER_RESETS;
++            if !kept {
++                unsafe { device.raw.destroy_framebuffer(framebuffer, None) };
++            }
++            kept
++        });
++        if self.framebuffers.len() > MAX_KEPT_FRAMEBUFFERS {
++            for (_, (framebuffer, _)) in self.framebuffers.drain() {
++                unsafe { self.device.raw.destroy_framebuffer(framebuffer, None) };
++            }
+         }
+         let _ = unsafe {
+             self.device
+diff --git a/wgpu-hal/src/vulkan/device.rs b/wgpu-hal/src/vulkan/device.rs
+index c72a986..fbe4e0b 100644
+--- a/wgpu-hal/src/vulkan/device.rs
++++ b/wgpu-hal/src/vulkan/device.rs
+@@ -1271,6 +1271,7 @@ impl crate::Device for super::Device {
+             rpass_debug_marker_active: false,
+             end_of_pass_timer_query: None,
+             framebuffers: Default::default(),
++            framebuffer_resets: 0,
+             temp_texture_views: Default::default(),
+             counters: Arc::clone(&self.counters),
+             current_pipeline_is_multiview: false,
+diff --git a/wgpu-hal/src/vulkan/mod.rs b/wgpu-hal/src/vulkan/mod.rs
+index 2fbb629..2606ccb 100644
+--- a/wgpu-hal/src/vulkan/mod.rs
++++ b/wgpu-hal/src/vulkan/mod.rs
+@@ -986,7 +986,10 @@ pub struct CommandEncoder {
+     /// the given pool & location.
+     end_of_pass_timer_query: Option<(vk::QueryPool, u32)>,
+ 
+-    framebuffers: FastHashMap<FramebufferKey, vk::Framebuffer>,
++    /// LGP patch: each framebuffer with the `framebuffer_resets` count of its
++    /// last use (see `keep_framebuffers`).
++    framebuffers: FastHashMap<FramebufferKey, (vk::Framebuffer, u32)>,
++    framebuffer_resets: u32,
+     temp_texture_views: FastHashMap<TempTextureViewKey, IdentifiedTextureView>,
+ 
+     counters: Arc<wgt::HalCounters>,
+@@ -1013,7 +1016,7 @@ impl Drop for CommandEncoder {
+             self.device.raw.destroy_command_pool(self.raw, None);
+         }
+ 
+-        for (_, fb) in self.framebuffers.drain() {
++        for (_, (fb, _)) in self.framebuffers.drain() {
+             unsafe { self.device.raw.destroy_framebuffer(fb, None) };
+         }
+ 

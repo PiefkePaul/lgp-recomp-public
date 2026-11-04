@@ -1,0 +1,49 @@
+<!doctype html>
+<!-- Minimal Emscripten shell for lgp web builds (P4.4): one canvas (#canvas,
+     the WebGPU surface), program output in a log. Command-line arguments come
+     from the query string: page.html?args=--frames%20120
+     Needs cross-origin isolation for threads: serve with tools/web/serve.py. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lgp</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; padding: 16px; font: 14px system-ui, sans-serif; background: #111; color: #ddd; }
+  canvas { display: block; width: 100%; max-width: 1280px; aspect-ratio: 16 / 9; background: #000; }
+  #status { margin: 8px 0; }
+  #log { white-space: pre-wrap; font: 12px ui-monospace, monospace; max-height: 40vh; overflow: auto; }
+</style>
+</head>
+<body>
+<canvas id="canvas" width="1280" height="720"></canvas>
+<div id="status">loading…</div>
+<div id="log"></div>
+<script>
+  const logEl = document.getElementById('log');
+  const statusEl = document.getElementById('status');
+  function out(text) {
+    console.log(text);
+    logEl.textContent += text + '\n';
+  }
+  const query = new URLSearchParams(location.search);
+  var Module = {
+    arguments: (query.get('args') || '').split(' ').filter(Boolean),
+    canvas: document.getElementById('canvas'),
+    print: out,
+    printErr: out,
+    setStatus: (text) => { statusEl.textContent = text; },
+    onExit: (code) => { statusEl.textContent = 'exited with ' + code; out('exit code ' + code); },
+  };
+  if (!self.crossOriginIsolated)
+    out('not cross-origin isolated: threads need COOP/COEP headers (tools/web/serve.py)');
+  if (!navigator.gpu)
+    out('this browser has no WebGPU (navigator.gpu)');
+  // return_call 0: lifted code needs Wasm tail calls (Chrome 112, Firefox 121, Safari 18.2).
+  if (!WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 2, 1, 0, 10, 6, 1, 4, 0, 18, 0, 11])))
+    out('this browser has no WebAssembly tail calls: the game cannot load (needs Chrome 112, Firefox 121 or Safari 18.2)');
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

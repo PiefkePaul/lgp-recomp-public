@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Settings > Apps > LGP (iOS/iPadOS). Keys are settings.ini's; the app
+     takes changes over at its next start and writes its values back
+     (lgp/platform/system_settings.hpp, runtime/boot/src/main.cpp). Titles are
+     English; de.lproj/Root.strings holds the German ones. -->
+<plist version="1.0">
+<dict>
+	<key>StringsTable</key>
+	<string>Root</string>
+	<key>PreferenceSpecifiers</key>
+	<array>
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>Controls</string>
+			<key>FooterText</key>
+			<string>Which controller the game is told about. All settings here apply from the app's next start.</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Title</key>
+			<string>Controller</string>
+			<key>Key</key>
+			<string>controller</string>
+			<key>DefaultValue</key>
+			<string>handheld</string>
+			<key>Titles</key>
+			<array>
+				<string>Handheld</string>
+				<string>Joy-Con right</string>
+				<string>Joy-Con left</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<string>handheld</string>
+				<string>joycon-right</string>
+				<string>joycon-left</string>
+			</array>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>Graphics</string>
+			<key>FooterText</key>
+			<string>Light effects half: expensive light and glow effects at half resolution, a little softer, less load on the GPU. Resolution: less is blurrier and eases the GPU. Graphics thread: graphics on a thread of their own, one frame ahead. Automatic: what is set for this device.</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Title</key>
+			<string>Light effects</string>
+			<key>Key</key>
+			<string>effects</string>
+			<key>DefaultValue</key>
+			<string></string>
+			<key>Titles</key>
+			<array>
+				<string>Automatic</string>
+				<string>Full</string>
+				<string>Half</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<string></string>
+				<string>full</string>
+				<string>half</string>
+			</array>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Title</key>
+			<string>Resolution</string>
+			<key>Key</key>
+			<string>render_scale</string>
+			<key>DefaultValue</key>
+			<string>1</string>
+			<key>Titles</key>
+			<array>
+				<string>100 %</string>
+				<string>75 %</string>
+				<string>50 %</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<string>1</string>
+				<string>0.75</string>
+				<string>0.5</string>
+			</array>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Title</key>
+			<string>Graphics thread</string>
+			<key>Key</key>
+			<string>async</string>
+			<key>DefaultValue</key>
+			<string></string>
+			<key>Titles</key>
+			<array>
+				<string>Automatic</string>
+				<string>On</string>
+				<string>Off</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<string></string>
+				<string>1</string>
+				<string>0</string>
+			</array>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>Trading and battling</string>
+			<key>FooterText</key>
+			<string>Wi-Fi: with devices on the same Wi-Fi (in the game: players nearby). Online (in the game: players far away) always goes over our server; with the Wi-Fi off, players nearby go over it too. Server: another server, empty: the server of this build. Room: only devices with the same room find each other, empty: everyone on the server.</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+			<key>Title</key>
+			<string>Over Wi-Fi</string>
+			<key>Key</key>
+			<string>ldn</string>
+			<key>DefaultValue</key>
+			<string>lan</string>
+			<key>TrueValue</key>
+			<string>lan</string>
+			<key>FalseValue</key>
+			<string>off</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSTextFieldSpecifier</string>
+			<key>Title</key>
+			<string>Server</string>
+			<key>Key</key>
+			<string>ldn_server</string>
+			<key>DefaultValue</key>
+			<string></string>
+			<key>KeyboardType</key>
+			<string>URL</string>
+			<key>AutocapitalizationType</key>
+			<string>None</string>
+			<key>AutocorrectionType</key>
+			<string>No</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSTextFieldSpecifier</string>
+			<key>Title</key>
+			<string>Room</string>
+			<key>Key</key>
+			<string>ldn_room</string>
+			<key>DefaultValue</key>
+			<string></string>
+			<key>AutocapitalizationType</key>
+			<string>None</string>
+			<key>AutocorrectionType</key>
+			<string>No</string>
+		</dict>
+	</array>
+</dict>
+</plist>

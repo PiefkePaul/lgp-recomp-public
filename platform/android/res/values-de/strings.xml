@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- German texts of the game import (GameImport.java); the English ones are in
+     values/strings.xml. -->
+<resources>
+    <string name="import_choose_folder">Ordner wählen</string>
+    <string name="import_quit">Beenden</string>
+    <string name="import_unreadable">Der Ordner lässt sich nicht lesen: %1$s</string>
+    <string name="import_no_app_folder">Kein App-Ordner: %1$s</string>
+    <string name="import_no_space">Zu wenig freier Speicher: gebraucht %1$s, frei %2$s.</string>
+    <string name="import_copying">Spieldaten werden kopiert</string>
+    <string name="import_cancel">Abbrechen</string>
+    <string name="import_copy_failed">Das Kopieren ging nicht: %1$s</string>
+    <string name="import_several_games">Im gewählten Ordner liegen mehrere Spiele. Bitte direkt den Ordner mit exefs wählen.</string>
+    <string name="import_no_exefs">Im gewählten Ordner fehlt der Unterordner exefs. Bitte den Ordner wählen, der exefs und romfs (oder romfs.bin) enthält.</string>
+    <string name="import_exefs_empty">Der Ordner exefs ist leer.</string>
+    <string name="import_no_romfs">Neben exefs fehlt romfs (Ordner) oder romfs.bin.</string>
+    <string name="import_progress">%1$s von %2$s\n%3$s</string>
+</resources>

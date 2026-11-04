@@ -1,0 +1,15 @@
+# The same as sdk_app_menu_midgame_sync.txt with LGP_WEBGPU_ASYNC_EXECUTE=1 (the
+# macOS default): the pause in the middle of the game drains the queue, so both
+# presented frames are shown, and the game goes on after resume.
+menu: play
+app: save slot 1 *
+backend: asynchronous execution (1 present(s) in flight, LGP_WEBGPU_ASYNC_EXECUTE)
+menu: pause
+menu: game paused in *
+menu: game stands at frame 2, 2 shown
+menu: backup
+menu: backup *
+menu: resume
+start: sdk
+exit: ExitProcess
+nvn: frames 3*

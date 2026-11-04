@@ -1,0 +1,8 @@
+# lgp_boot_sdkpair --exefs <dir> --audio sdl (SDL_AUDIO_DRIVER=dummy): the
+# SDL3 sink is created before the start and the boot runs as without it.
+npdm: Application, program 0x0100c0ffee000000, main thread stack 0x40000 priority 44 core 0
+audio: sdl (dummy)
+debug: main: first graphics call
+start: sdk
+exit: ExitProcess
+graphics stop: _ZN2nv20SetGraphicsAllocator*

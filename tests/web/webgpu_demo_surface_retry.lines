@@ -1,0 +1,3 @@
+# browser.webgpu_demo_surface_retry: two failed getContext calls, then a surface.
+webgpu: surface: getContext('webgpu') failed, trying again
+webgpu: surface created on attempt 3

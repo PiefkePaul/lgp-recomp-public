@@ -1,0 +1,8 @@
+# --mods wild-battles without wild-battles.cfg: reported, the run as without mods.
+debug: main: first graphics call
+start: sdk
+exit: ExitProcess
+nvn: frames 2 (limit), procs *
+mods: wild-battles: not started, no *
+unresolved imports: 0
+unresolved branch targets: 0

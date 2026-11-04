@@ -1,0 +1,27 @@
+# Regression cases of the lifter fuzzer (tests/lifter_fuzz). Every divergence
+# the fuzzer found stays here after the fix; ctest runs them all
+# (lifter_fuzz.difftest). Format: see parse_regressions() in fuzz_gen.hpp.
+# Lines come from `lgp_lifter_fuzz` (minimised); the comment above each line
+# names the bug and the fix.
+
+# Calibration, not a lifter bug: CLS (32 bit) of 0 must be 31. Found within
+# 1 600 cases when cls32() was deliberately broken (missing "| 1"), see
+# docs/knowledge/lifter-fuzzing.md. Keeps the replay path exercised.
+fuzz/0x281e1eaa814123e4 seed=0x82713d762f7cc1d7 code=0x5ac015e6 ov=x15:0x0
+
+# Register locals: found by a trial that reloaded after an SVC only registers
+# read before their next write. A write-back after a merge stores registers
+# that are dirty on only one path, so those must be reloaded as well
+# (docs/knowledge/lifted-code-performance.md).
+fuzz/0x4b93fd386172d570 seed=0xeed3f41579d8163a code=0xd503201f,0xd503201f,0xd40002a1,0xd503201f,0xd503201f,0xd503201f,0xd503201f,0xd503201f,0x4df3e385,0x54000063,0xd503201f,0xd264d801,0xd503201f,0xd503201f,0xb5fffe7d ov=x28:0x2041a3
+
+# Oracle, not lifter: Unicorn built without -fwrapv (clang -O2) negated SABD
+# lanes whose difference overflows int32 (tests/difftest/unicorn/CMakeLists.txt).
+fuzz/0x39cf22bd529505aa seed=0x58cc1e33c31d0f14 code=0x4ea97782 ov=v9.hi:0x800180014ea9b4a5
+
+# Calls, release shape: a trial that kept the callee-saved x19-x29 in locals
+# across BL and did not write them back for the call. A callee may read them
+# (frame records, here `add x5, x26, #1`) and saw stale values. Dropped: it
+# brought nothing in WebAssembly and cost natively (lifted-code-performance.md).
+# Hand-reduced from fuzz/0x95ab81ecb5634ca3.
+fuzz/0x1 seed=0x1 code=0xd282469a,0x94000003,0xf100001f,0xd42988e0,0x91000745,0xd65f03c0

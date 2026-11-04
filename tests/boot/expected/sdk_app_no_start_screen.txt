@@ -1,0 +1,8 @@
+# lgp_boot_sdkpair_app --app in a window (xvfb) with settings.ini start_screen
+# unset (0): no start screen, the game starts at once with save slot 1 (no
+# "menu: play"), the pause button stays.
+menu: start screen skipped (start_screen = 0)
+app: save slot 1 *
+start: sdk
+exit: ExitProcess
+nvn: frames 3*

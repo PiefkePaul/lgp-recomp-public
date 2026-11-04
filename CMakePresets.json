@@ -1,0 +1,163 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Native desktop (Ninja, Debug)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Native desktop (Ninja, Release)",
+      "inherits": "default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "ci",
+      "displayName": "CI (no git hook install)",
+      "inherits": "default",
+      "cacheVariables": {
+        "LGP_INSTALL_GIT_HOOKS": "OFF"
+      }
+    },
+    {
+      "name": "wasm",
+      "displayName": "WebAssembly (Emscripten, Ninja, Release)",
+      "description": "Needs EMSDK set (run emsdk_env first). Tests run in Node via CMAKE_CROSSCOMPILING_EMULATOR.",
+      "inherits": "default",
+      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "ci-wasm",
+      "displayName": "CI WebAssembly (no git hook install)",
+      "inherits": "wasm",
+      "cacheVariables": {
+        "LGP_INSTALL_GIT_HOOKS": "OFF"
+      }
+    },
+    {
+      "name": "android",
+      "displayName": "Android arm64-v8a (NDK, Ninja, Release)",
+      "description": "Needs ANDROID_NDK_HOME (NDK r30 tested; r27c fails, its libc++ has no std::atomic_ref). Programs run on the phone over adb (P7.3, docs/knowledge/android-ndk-build.md).",
+      "inherits": "default",
+      "toolchainFile": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANDROID_ABI": "arm64-v8a",
+        "ANDROID_PLATFORM": "android-29",
+        "ANDROID_STL": "c++_static",
+        "LGP_ENABLE_SDL": "OFF"
+      }
+    },
+    {
+      "name": "android-app",
+      "displayName": "Android apps (APK with SDL3)",
+      "description": "Like android, with SDL3: lgp_game and the WebGPU demo as APKs. Needs ANDROID_HOME (platform + build-tools) and a JDK.",
+      "inherits": "android",
+      "cacheVariables": {
+        "LGP_ENABLE_SDL": "ON",
+        "BUILD_TESTING": "OFF"
+      }
+    },
+    {
+      "name": "ios-cross",
+      "displayName": "iOS/iPadOS device without Xcode (Linux/WSL, Entwurf)",
+      "description": "Needs the iPhoneOS SDK from the user's own Xcode.xip (LGP_IOS_SDK or xtool's SDK bundle) and host LLVM with ld64.lld; unsigned app, signed and installed by xtool (tools/ios/make_ipa.py, docs/knowledge/ios-ohne-mac.md). Not yet run with a real SDK.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "${sourceDir}/cmake/toolchains/ios-cross.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "OFF",
+        "LGP_IOS_CCACHE": "OFF",
+        "LGP_IOS_CLOUD_SAVES": "OFF"
+      }
+    },
+    {
+      "name": "ios",
+      "displayName": "iOS/iPadOS device (Xcode)",
+      "description": "Mac only. Needs -DLGP_IOS_TEAM=<team id> and, for lgp_game, -DLGP_GAME_LIFTED=<lgp_lift --split output>. Builds for arm64 devices; tests stay in the desktop tree (docs/knowledge/ios-app-bauen.md).",
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
+      "cacheVariables": {
+        "CMAKE_SYSTEM_NAME": "iOS",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "16.0",
+        "CMAKE_TRY_COMPILE_TARGET_TYPE": "STATIC_LIBRARY",
+        "BUILD_TESTING": "OFF"
+      }
+    },
+    {
+      "name": "tvos",
+      "displayName": "tvOS device (Xcode)",
+      "description": "Mac only. Like ios, for Apple TV 4K: needs -DLGP_IOS_TEAM=<team id>, -DLGP_WGPU_NATIVE_DIR=<tools/apple/build_wgpu_native.sh tvos output> and, for lgp_game, -DLGP_GAME_LIFTED=<lgp_lift --split output> (docs/knowledge/tvos-als-zielplattform.md).",
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
+      "cacheVariables": {
+        "CMAKE_SYSTEM_NAME": "tvOS",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "17.0",
+        "CMAKE_TRY_COMPILE_TARGET_TYPE": "STATIC_LIBRARY",
+        "BUILD_TESTING": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "default", "configurePreset": "default" },
+    { "name": "release", "configurePreset": "release" },
+    { "name": "ci", "configurePreset": "ci" },
+    { "name": "wasm", "configurePreset": "wasm" },
+    { "name": "ci-wasm", "configurePreset": "ci-wasm" },
+    { "name": "android", "configurePreset": "android" },
+    { "name": "android-app", "configurePreset": "android-app" },
+    { "name": "ios-cross", "configurePreset": "ios-cross" },
+    { "name": "ios", "configurePreset": "ios", "configuration": "Release",
+      "nativeToolOptions": ["-allowProvisioningUpdates", "-jobs", "2"] },
+    { "name": "tvos", "configurePreset": "tvos", "configuration": "Release",
+      "nativeToolOptions": ["-allowProvisioningUpdates", "-jobs", "2"] }
+  ],
+  "testPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "ci",
+      "configurePreset": "ci",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "wasm",
+      "configurePreset": "wasm",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "ci-wasm",
+      "configurePreset": "ci-wasm",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "android",
+      "configurePreset": "android",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

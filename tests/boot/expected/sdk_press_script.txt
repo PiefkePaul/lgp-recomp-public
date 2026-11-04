@@ -1,0 +1,5 @@
+# lgp_boot_sdkpair --graphics hle --frames 2 --press with 6 entries, two of
+# them waiting for a stable image.
+input: watching the presented image (hash every 33 ms)
+input: script (6 presses)
+nvn: frames 2 (limit), procs *

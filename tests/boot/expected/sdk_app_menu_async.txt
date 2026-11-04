@@ -1,0 +1,14 @@
+# lgp_boot_sdkpair_app --app --menu-script play,pause@0,backup,resume@20 with
+# LGP_WEBGPU_ASYNC_EXECUTE=1 (the macOS default): the same as sdk_app_menu.txt with
+# the backend behind the guest. pause@0 for the reason given there: the pause
+# comes before the game starts, the queue is still empty then.
+menu: play
+app: save slot 1 *
+backend: asynchronous execution (1 present(s) in flight, LGP_WEBGPU_ASYNC_EXECUTE)
+menu: pause
+menu: backup
+menu: backup *
+menu: resume
+start: sdk
+exit: ExitProcess
+nvn: frames 3*

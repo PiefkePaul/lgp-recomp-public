@@ -1,0 +1,6 @@
+# lgp_boot_sdkpair --graphics hle --paced: 3 frames at present interval 1
+# wait about 2 x 16.7 ms for the display (a clear takes far less; under 10 ms
+# fails, see FAIL_REGULAR_EXPRESSION).
+present: paced (present interval at 60 Hz)
+nvn: frames 3, procs *
+present: waited *

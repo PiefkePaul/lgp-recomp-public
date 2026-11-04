@@ -1,0 +1,8 @@
+# --mods wild-battles whose encounter_touch has no hook door in the lifted code.
+debug: main: first graphics call
+start: sdk
+exit: ExitProcess
+nvn: frames 2 (limit), procs *
+mods: wild-battles: not started, hook encounter_touch 0x8000000 has no door*
+unresolved imports: 0
+unresolved branch targets: 0

@@ -1,0 +1,6 @@
+# lgp_boot_sdkpair_hosted --app --frames 2 (LGP_BOOT_APP_LOG_ALWAYS, as on
+# Android and iOS): settings from LGP_APP_DIR, output in <app>/logs/lgp.log,
+# which ends with the exit code.
+app: settings *
+nvn: frames 2 (limit), procs *
+lgp_boot: exit code 0

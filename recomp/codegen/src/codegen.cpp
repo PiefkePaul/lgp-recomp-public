@@ -1,0 +1,210 @@
+#include "lgp/recomp/codegen.hpp"
+
+#include <algorithm>
+#include <cinttypes>
+#include <cstdio>
+#include <stdexcept>
+
+namespace lgp::recomp {
+
+namespace {
+
+std::string hex(uint64_t v) {
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "0x%" PRIx64 "ull", v);
+    return buf;
+}
+
+// C++ string literal (module names come from file names).
+std::string quoted(const std::string& s) {
+    std::string out = "\"";
+    for (unsigned char c : s) {
+        if (c >= 0x20 && c < 0x7F && c != '"' && c != '\\' && c != '?') {
+            out += static_cast<char>(c);
+        } else {
+            char buf[8];
+            std::snprintf(buf, sizeof(buf), "\\%03o", c);
+            out += buf;
+        }
+    }
+    return out + "\"";
+}
+
+}  // namespace
+
+LiftFunction to_lift_function(const Function& f) {
+    LiftFunction lf;
+    lf.entry = f.entry;
+    lf.blocks.reserve(f.blocks.size());
+    for (const BasicBlock& b : f.blocks)
+        lf.blocks.push_back({b.start, b.end});
+    for (const JumpTable& jt : f.jump_tables)
+        lf.indirect_targets[jt.br_pc] = jt.targets;
+    return lf;
+}
+
+std::set<uint64_t> entries_for_symbols(const LinkedImage& image, const AnalysisResult& analysis,
+                                       const std::vector<std::string>& names) {
+    std::set<uint64_t> out;
+    for (const std::string& name : names) {
+        if (std::optional<uint64_t> va = image.symbol_va(name); va && analysis.is_entry(*va))
+            out.insert(*va);
+    }
+    // PLT stubs: a function whose tail call reads its target from the GOT slot
+    // of an import with one of the names.
+    for (const Function& f : analysis.functions) {
+        for (const BasicBlock& b : f.blocks) {
+            for (const Call& c : b.calls) {
+                if (!c.tail || c.via_slot == 0)
+                    continue;
+                const Import* imp = image.import_by_slot(c.via_slot);
+                if (imp != nullptr && std::find(names.begin(), names.end(), imp->name) != names.end())
+                    out.insert(f.entry);
+            }
+        }
+    }
+    // Stubs whose GOT slot is bound inside the same module (an interposable
+    // export such as the sdk's own setjmp: the slot is no import, so it has no
+    // name here): a one-block function that only tail-calls an entry found
+    // above and touches nothing but x16/x17 on the way (PLT stub `adrp x16;
+    // ldr x17, [x16, #o]; add x16, x16, #o; br x17`, or a single `b`). Anything
+    // that changes x0 or sp would not be setjmp any more.
+    const std::set<uint64_t> named = out;
+    auto stub_word = [&](uint64_t va, size_t i, size_t n) {
+        const uint32_t w = image.read_u32(va);
+        if (n == 1) return (w & 0xFC000000u) == 0x14000000u;                       // b
+        switch (i) {
+            case 0: return (w & 0x9F00001Fu) == 0x90000010u;                          // adrp x16
+            case 1: return (w & 0xFFC003FFu) == 0xF9400211u;                          // ldr x17, [x16, #o]
+            case 2: return (w & 0xFFC003FFu) == 0x91000210u;                          // add x16, x16, #o
+            default: return w == 0xD61F0220u;                                         // br x17
+        }
+    };
+    for (const Function& f : analysis.functions) {
+        if (f.blocks.size() != 1 || out.count(f.entry))
+            continue;
+        const BasicBlock& b = f.blocks[0];
+        const size_t n = static_cast<size_t>((b.end - b.start) / 4);
+        if ((n != 1 && n != 4) || b.start != f.entry || b.calls.size() != 1)
+            continue;
+        const Call& c = b.calls[0];
+        if (!c.tail || !named.count(c.target))
+            continue;
+        bool ok = true;
+        for (size_t i = 0; i < n && ok; ++i) ok = stub_word(b.start + 4 * i, i, n);
+        if (ok)
+            out.insert(f.entry);
+    }
+    return out;
+}
+
+ModuleCode generate_module(const LinkedImage& image, const AnalysisResult& analysis, const CodegenOptions& options) {
+    ModuleCode mc;
+    mc.setjmp_entries = entries_for_symbols(image, analysis, options.setjmp_symbols);
+    mc.longjmp_entries = entries_for_symbols(image, analysis, options.longjmp_symbols);
+
+    for (uint64_t va : options.hook_entries) {
+        if (!analysis.is_entry(va))
+            throw std::invalid_argument("hook " + hex(va) + ": no function starts there");
+        if (mc.setjmp_entries.count(va) || mc.longjmp_entries.count(va))
+            throw std::invalid_argument("hook " + hex(va) + ": setjmp/longjmp cannot be hooked");
+    }
+
+    LiftOptions lift = options.lift;
+    lift.setjmp_entries.insert(mc.setjmp_entries.begin(), mc.setjmp_entries.end());
+    Lifter lifter(
+        [&](uint64_t va, uint32_t& insn) {
+            try {
+                insn = image.read_u32(va);
+                return true;
+            } catch (const std::out_of_range&) {
+                return false;
+            }
+        },
+        analysis.function_entries, lift);
+
+    std::string prologue =
+        "// Generated by lgp_recomp_codegen (roadmap P2.5). Derived from the input code: do not commit.\n";
+    prologue += "#include \"lgp/lifted/lifted.hpp\"\n\n";
+    prologue += lifter.declarations();
+    prologue += "\n";
+    std::vector<std::string> bodies;
+    bodies.reserve(analysis.functions.size());
+    size_t total = 0;
+    for (const Function& f : analysis.functions) {
+        const std::string name = lifter.function_name(f.entry);
+        std::string body;
+        if (mc.setjmp_entries.count(f.entry)) {
+            body = "void " + name + "(lgp::CpuState* ctx) { ctx->pc = " + hex(f.entry) + "; LGP_SETJMP_INDIRECT(); }\n\n";
+            ++mc.stats.replaced;
+        } else if (mc.longjmp_entries.count(f.entry)) {
+            body = "void " + name + "(lgp::CpuState* ctx) { LGP_LONGJMP(); }\n\n";
+            ++mc.stats.replaced;
+        } else {
+            body = lifter.lift(to_lift_function(f), mc.stats.lift) + "\n";
+            if (options.hook_entries.count(f.entry)) {
+                // The lifted body becomes <name>_orig; <name>, which every call,
+                // tail call and the dispatch table reach, is the door.
+                const std::string head = "void " + name + "(";
+                if (body.compare(0, head.size(), head) != 0)
+                    throw std::logic_error("hook " + hex(f.entry) + ": unexpected function head");
+                body.insert(name.size() + 5, "_orig");
+                body += "void " + name + "(lgp::CpuState* ctx) { LGP_HOOKED(" + hex(f.entry) + ", " + name +
+                        "_orig); }\n\n";
+                ++mc.stats.hooked;
+            }
+            ++mc.stats.functions;
+            mc.stats.jump_tables += f.jump_tables.size();
+            for (const BasicBlock& b : f.blocks)
+                if (b.term == Terminator::IndirectJump)
+                    ++mc.stats.indirect_jumps;
+        }
+        total += body.size();
+        bodies.push_back(std::move(body));
+    }
+
+    // Function bodies spread over `parts` translation units of about equal
+    // size (a whole game module does not compile as one); every part declares
+    // all functions, the tables go into the first.
+    const size_t parts = std::max<size_t>(1, std::min<size_t>(options.parts, std::max<size_t>(1, bodies.size())));
+    mc.sources.assign(parts, prologue);
+    const size_t target = total / parts + 1;
+    size_t part = 0, filled = 0;
+    for (std::string& body : bodies) {
+        if (filled >= target && part + 1 < parts) {
+            ++part;
+            filled = 0;
+        }
+        filled += body.size();
+        mc.sources[part] += body;
+        std::string().swap(body);
+    }
+    std::string& out = mc.sources.front();
+    out += "extern const lgp::LiftedEntry " + options.entries_name + "[] = {\n";
+    for (const Function& f : analysis.functions)
+        out += "    {" + hex(f.entry) + ", &" + lifter.function_name(f.entry) + "},\n";
+    out += "};\n";
+    out += "extern const size_t " + options.entries_name + "_count = " + std::to_string(analysis.functions.size()) +
+           ";\n";
+    if (!options.hook_entries.empty()) {
+        out += "static const uint64_t " + options.entries_name + "_hookable[] = {\n";
+        for (uint64_t va : options.hook_entries)
+            out += "    " + hex(va) + ",\n";
+        out += "};\n";
+        out += "LGP_HOOKABLE(" + options.entries_name + "_hookable, " + std::to_string(options.hook_entries.size()) +
+               ")\n";
+    }
+    // The layout the addresses above belong to (lgp::LiftedModule); the boot
+    // program refuses to run the code against a different one.
+    out += "extern const lgp::LiftedModule " + options.entries_name + "_modules[] = {\n";
+    for (const Module& m : image.modules)
+        out += "    {" + quoted(m.name) + ", " + hex(m.base) + ", " + hex(m.image.size()) + ", " +
+               quoted(m.hex_module_id()) + "},\n";
+    out += "};\n";
+    out += "extern const size_t " + options.entries_name + "_modules_count = " + std::to_string(image.modules.size()) +
+           ";\n";
+    mc.source = mc.sources.front();
+    return mc;
+}
+
+}  // namespace lgp::recomp

@@ -1,0 +1,9 @@
+# lgp_boot_sdkpair_app --app --menu-script play with the online-button file
+# in --mods-dir: the start from the menu takes both links (--ldn both) and
+# the hidden mod online-button (not on the menu's page).
+menu: play
+app: save slot 1 *
+app: ldn both
+start: sdk
+exit: ExitProcess
+mods: on online-button

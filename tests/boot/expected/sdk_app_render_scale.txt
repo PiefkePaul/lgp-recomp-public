@@ -1,0 +1,7 @@
+# lgp_boot_sdkpair_app --app --menu-script play with render_scale = 0.75 in
+# settings.ini: the WebGPU backend keeps its render targets at 0.75 of their
+# size (--render-scale 0.75) and the game runs to its end.
+menu: play
+render scale: 0.75 (--render-scale)
+start: sdk
+exit: ExitProcess

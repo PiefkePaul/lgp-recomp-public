@@ -1,0 +1,8 @@
+# lgp_boot_sdkpair --exefs <dir> --graphics hle --frames 2: ends at the
+# second present.
+debug: main: first graphics call
+start: sdk
+exit: ExitProcess
+nvn: frames 2 (limit), procs *
+unresolved imports: 0
+unresolved branch targets: 0

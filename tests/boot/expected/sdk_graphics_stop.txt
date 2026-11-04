@@ -1,0 +1,17 @@
+# lgp_boot_sdkpair --exefs <dir>: lines that must appear in this order.
+npdm: Application, program 0x0100c0ffee000000, main thread stack 0x40000 priority 44 core 0
+debug: sdk: nn::init::Start
+debug: sdk: main thread handle: ok
+debug: sdk: no argument area: ok
+debug: sdk: initializers sdk before main: ok
+debug: sdk: nn::ro lists bound: ok
+debug: main: nnMain
+debug: main: own initializer ran once: ok
+debug: main: sdk data import: ok
+debug: main: nn::ro symbol lookup: ok
+debug: main: first graphics call
+start: sdk
+exit: ExitProcess
+graphics stop: _ZN2nv20SetGraphicsAllocator*
+unresolved imports: 0
+unresolved branch targets: 0

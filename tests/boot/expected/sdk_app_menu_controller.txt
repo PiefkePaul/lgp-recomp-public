@@ -1,0 +1,14 @@
+# lgp_boot_sdkpair_app --app --menu-script
+# play,controller:joycon-right@1,controller:handheld@2 in a window (xvfb) with
+# SDL input: the controller row changes player 1's controller while the game
+# runs (SdlInput::set_player1_controller), there and back.
+menu: play
+app: save slot 1 *
+menu: script sets controller 1
+menu: settings changed
+menu: controller joycon-right
+menu: script sets controller 0
+menu: settings changed
+menu: controller handheld
+start: sdk
+exit: ExitProcess

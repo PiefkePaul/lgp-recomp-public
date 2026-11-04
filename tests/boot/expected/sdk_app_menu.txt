@@ -1,0 +1,15 @@
+# lgp_boot_sdkpair_app --app --menu-script play,pause@0,backup,resume@20 in a
+# window (xvfb): start screen, pause menu with a backup of the save slot,
+# resume once 20 frames were shown (the paused menu's frames count, the game
+# itself presents only 3), then the game runs to its end (P7 app menus).
+# pause@0 is taken before the game starts: at pause@1 the short game could
+# reach its end before the host loop's next turn (then no backup, no resume).
+menu: play
+app: save slot 1 *
+menu: pause
+menu: backup
+menu: backup *
+menu: resume
+start: sdk
+exit: ExitProcess
+nvn: frames 3*

@@ -1,0 +1,10 @@
+# lgp_boot_sdkpair_app --app --frames 2 with LGP_APP_DIR: options from
+# settings.ini, saves below the app folder, then the run of
+# sdk_graphics_hle_frames.txt.
+app: settings *
+debug: main: first graphics call
+start: sdk
+exit: ExitProcess
+nvn: frames 2 (limit), procs *
+unresolved imports: 0
+unresolved branch targets: 0

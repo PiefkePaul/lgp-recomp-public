@@ -1,0 +1,3 @@
+# A usage error lands in the log too (the app has no console).
+app: arguments --exefs missing --press 1x:a
+lgp_boot: --press: bad trigger 1x*

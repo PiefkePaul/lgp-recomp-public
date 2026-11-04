@@ -1,0 +1,7 @@
+# lgp_boot_sdkpair_app --app --menu off with the old rows encounter_rate = gen1
+# and visible_pokemon = 2 in settings.ini: they load without an error,
+# visible_pokemon = 2 takes the app's Pokémon Gelb (random-encounters) out of
+# the mods, so the app says it is off, and the game runs to its end.
+app: Pokémon Gelb off, the field Pokémon as the game has them
+start: sdk
+exit: ExitProcess

@@ -1,0 +1,19 @@
+/* German titles of Root.plist (Settings > Apps > LGP); the plist holds the English ones. */
+"Controls" = "Steuerung";
+"Which controller the game is told about. All settings here apply from the app's next start." = "Welcher Controller dem Spiel gemeldet wird. Alle Einstellungen hier gelten ab dem nächsten Start der App.";
+"Joy-Con right" = "Joy-Con rechts";
+"Joy-Con left" = "Joy-Con links";
+"Graphics" = "Grafik";
+"Light effects half: expensive light and glow effects at half resolution, a little softer, less load on the GPU. Resolution: less is blurrier and eases the GPU. Graphics thread: graphics on a thread of their own, one frame ahead. Automatic: what is set for this device." = "Lichteffekte halb: teure Licht- und Leuchteffekte in halber Auflösung, etwas weicher, weniger Last für die GPU. Auflösung: weniger ist unschärfer und entlastet die GPU. Grafik-Thread: Grafik auf eigenem Thread, ein Bild voraus. Automatisch: was für dieses Gerät eingestellt ist.";
+"Light effects" = "Lichteffekte";
+"Automatic" = "Automatisch";
+"Full" = "Voll";
+"Half" = "Halb";
+"Resolution" = "Auflösung";
+"Graphics thread" = "Grafik-Thread";
+"On" = "An";
+"Off" = "Aus";
+"Trading and battling" = "Tauschen und Kämpfen";
+"Wi-Fi: with devices on the same Wi-Fi (in the game: players nearby). Online (in the game: players far away) always goes over our server; with the Wi-Fi off, players nearby go over it too. Server: another server, empty: the server of this build. Room: only devices with the same room find each other, empty: everyone on the server." = "WLAN: mit Geräten im selben WLAN (im Spiel: Spieler in der Nähe). Online (im Spiel: Spieler in der Ferne) läuft immer über unseren Server; ist das WLAN aus, laufen auch Spieler in der Nähe über ihn. Server: ein anderer Server, leer: der Server dieses Baus. Raum: nur Geräte mit demselben Raum finden sich, leer: alle auf dem Server.";
+"Over Wi-Fi" = "Im WLAN";
+"Room" = "Raum";
